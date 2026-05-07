@@ -1,0 +1,7 @@
+根据 data.txt的数据，看一下将GDP最高5年的年份数据，按以下json格式输出：
+```json
+{
+    "year": {year},
+    "gdp": {gdp} 
+}
+```
