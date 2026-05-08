@@ -113,6 +113,11 @@ type Config struct {
 	BashBlacklist         []Pattern
 	CurlWhitelist         []Pattern
 	CurlBlacklist         []Pattern
+	AutoCompact           bool     // Default: true
+	ContextWindowSize     int      // Default: 200000
+	AutoCompactThresholdPct float64 // Default: 0.8
+	AllowedReadDirs       []string
+	AllowedWriteDirs      []string
 }
 
 
@@ -136,5 +141,8 @@ func DefaultConfig() Config {
 		EnableSubagent:        false,
 		SubagentMaxTurns:      50,
 		EnableSkills:          false,
+		AutoCompact:            true,
+		ContextWindowSize:      200000,
+		AutoCompactThresholdPct: 0.8,
 	}
 }

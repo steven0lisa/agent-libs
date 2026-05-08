@@ -6,6 +6,7 @@ export {
   assistantMessage,
   successResult,
   errorResult,
+  compactEvent,
 } from './types.js';
 export type {
   Message,
@@ -15,12 +16,15 @@ export type {
   EventType,
   ToolResult,
 } from './types.js';
+export { estimateTokens, shouldCompact, compactConversation, autoCompactIfNeeded } from './compact.js';
 export {
   ReadFileTool,
   WriteFileTool,
   UpdateFileTool,
   BashTool,
   CurlTool,
+  GlobTool,
+  GrepTool,
   SubAgentTool,
 } from './tools/index.js';
 export { SkillLoader, SkillTool } from './skills/index.js';

@@ -4,13 +4,15 @@ import { AnthropicClient, ToolDefinition } from './client.js';
 import {
   AgentConfig, ITool, resolveConfig, ToolContext,
 } from './config.js';
+import { autoCompactIfNeeded, estimateTokens } from './compact.js';
 import { buildSystemPrompt } from './prompt.js';
 import {
   ContentBlock, Event, isToolUse, Message,
   userMessage, assistantMessage, messageStartEvent, messageEndEvent,
   messageDeltaEvent, thinkingDeltaEvent, turnStartEvent, errorEvent, completeEvent,
+  compactEvent,
 } from './types.js';
-import { ReadFileTool, WriteFileTool, UpdateFileTool, BashTool, CurlTool, SubAgentTool } from './tools/index.js';
+import { ReadFileTool, WriteFileTool, UpdateFileTool, BashTool, CurlTool, GlobTool, GrepTool, SubAgentTool } from './tools/index.js';
 import { SkillLoader, SkillTool } from './skills/index.js';
 import type { SkillInfo } from './skills/types.js';
 
@@ -51,6 +53,8 @@ export class Agent {
     this.registerTool(new UpdateFileTool());
     this.registerTool(new BashTool(this.config.bashWhitelist, this.config.bashBlacklist));
     this.registerTool(new CurlTool(this.config.curlWhitelist, this.config.curlBlacklist));
+    this.registerTool(new GlobTool());
+    this.registerTool(new GrepTool());
     for (const tool of this.config.tools) this.registerTool(tool);
 
     if (this.config.enableSubagent) {
@@ -137,6 +141,7 @@ export class Agent {
       this.loadedSkills,
     );
     const client = new AnthropicClient(this.config);
+    let consecutiveCompactFailures = 0;
 
     try {
       while (this.turnCount < this.config.maxTurns) {
@@ -161,6 +166,19 @@ export class Agent {
           description: t.description,
           input_schema: t.inputSchema,
         }));
+
+        // Auto compact
+        if (this.config.autoCompact) {
+          const result = await autoCompactIfNeeded(this.config, client, this.messageHistory, consecutiveCompactFailures);
+          if (result.history.length !== this.messageHistory.length) {
+            this.messageHistory = result.history;
+            const estimated = estimateTokens(this.messageHistory);
+            const e = compactEvent(this.messageHistory.length, estimated);
+            yield e;
+            this.config.callback?.(e);
+          }
+          consecutiveCompactFailures = result.failures;
+        }
 
         await this.waitIfPaused();
         if (!this.checkState()) break;

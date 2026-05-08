@@ -50,7 +50,11 @@ class ReadFileTool:
             return ToolResult.error("file_path is required")
 
         try:
-            resolved = resolve_safe_path(file_path, context.work_dir)
+            resolved = resolve_safe_path(
+                file_path,
+                context.work_dir,
+                context.allowed_read_dirs,
+            )
         except ValueError as e:
             return ToolResult.error(str(e))
 

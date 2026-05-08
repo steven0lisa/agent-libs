@@ -53,7 +53,7 @@ class TestReadFileTool:
         ctx = ToolContext(work_dir="/tmp", message_history=[])
         result = await tool.call({"file_path": "../etc/passwd"}, ctx)
         assert result.is_error is True
-        assert "escapes working directory" in result.content
+        assert "escapes" in result.content
 
     @pytest.mark.asyncio
     async def test_missing_file_path(self, tool, context):
@@ -99,7 +99,7 @@ class TestWriteFileTool:
                 {"file_path": "../outside.txt", "content": "x"}, ctx
             )
             assert result.is_error is True
-            assert "escapes working directory" in result.content
+            assert "escapes" in result.content
 
     def test_is_not_read_only(self, tool):
         assert tool.is_read_only is False
@@ -183,7 +183,7 @@ class TestUpdateFileTool:
                 ctx,
             )
             assert result.is_error is True
-            assert "escapes working directory" in result.content
+            assert "escapes" in result.content
 
 
 class TestBashTool:

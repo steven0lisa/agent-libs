@@ -12,6 +12,8 @@ from .types import Message
 class ToolContext:
     work_dir: str
     message_history: list[Message]
+    allowed_read_dirs: list[str] | None = None
+    allowed_write_dirs: list[str] | None = None
 
 
 @dataclass

@@ -5,6 +5,8 @@ import com.agentlib.skills.SkillLoader;
 import com.agentlib.skills.SkillTool;
 import com.agentlib.tools.BashTool;
 import com.agentlib.tools.CurlTool;
+import com.agentlib.tools.GlobTool;
+import com.agentlib.tools.GrepTool;
 import com.agentlib.tools.ReadFileTool;
 import com.agentlib.tools.SubAgentTool;
 import com.agentlib.tools.UpdateFileTool;
@@ -74,6 +76,8 @@ public class Agent {
         registerTool(new ReadFileTool());
         registerTool(new WriteFileTool());
         registerTool(new UpdateFileTool());
+        registerTool(new GrepTool());
+        registerTool(new GlobTool());
         registerTool(new BashTool(config.bashWhitelist(), config.bashBlacklist()));
         registerTool(new CurlTool(
             HttpClient.newBuilder()
@@ -305,6 +309,7 @@ public class Agent {
                     );
 
                     AnthropicClient client = new AnthropicClient(config);
+                    int consecutiveCompactFailures = 0;
 
                     while (turnCount < config.maxTurns()) {
                         // Check stop
@@ -332,6 +337,25 @@ public class Agent {
                                 emitEvent(error);
                                 break;
                             }
+                        }
+
+                        // Auto compact check
+                        if (config.autoCompact()) {
+                            AutoCompact.CompactResult result = AutoCompact.autoCompactIfNeeded(
+                                client, config, List.copyOf(messageHistory), consecutiveCompactFailures
+                            );
+                            if (result.history().size() != messageHistory.size()) {
+                                // Replace history with compacted version
+                                messageHistory.clear();
+                                messageHistory.addAll(result.history());
+                                CompactEvent compactEvent = new CompactEvent(
+                                    result.history().size(),
+                                    AutoCompact.estimateTokens(result.history())
+                                );
+                                subscriber.onNext(compactEvent);
+                                emitEvent(compactEvent);
+                            }
+                            consecutiveCompactFailures = result.failures();
                         }
 
                         // Build tool definitions
@@ -578,7 +602,8 @@ public class Agent {
         }
 
         Map<String, Object> input = objectMapper.convertValue(tu.input(), new TypeReference<>() {});
-        ToolContext ctx = new ToolContext(config.workDir(), List.copyOf(messageHistory));
+        ToolContext ctx = new ToolContext(config.workDir(), List.copyOf(messageHistory),
+            config.allowedReadDirs(), config.allowedWriteDirs());
 
         ToolResult result;
         try {

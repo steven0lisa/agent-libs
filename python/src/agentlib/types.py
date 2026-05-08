@@ -68,6 +68,7 @@ class EventType(str, Enum):
     TOOL_USE_END = "tool_use_end"
     ERROR = "error"
     COMPLETE = "complete"
+    COMPACT = "compact"
 
 
 @dataclass
@@ -110,3 +111,10 @@ class Event:
     @staticmethod
     def complete(final_content: str) -> Event:
         return Event(type=EventType.COMPLETE, data={"final_content": final_content})
+
+    @staticmethod
+    def compact(message_count: int, token_estimate: int) -> Event:
+        return Event(
+            type=EventType.COMPACT,
+            data={"message_count": message_count, "token_estimate": token_estimate},
+        )

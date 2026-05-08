@@ -22,7 +22,7 @@ use crate::types::{AgentState, ContentBlock, Event, Message, Role};
 pub struct Agent {
     config: AgentConfig,
     client: AnthropicClient,
-    tools: HashMap<String, Box<dyn Tool>>,
+    tools: HashMap<String, Arc<dyn Tool>>,
     message_history: Arc<RwLock<Vec<Message>>>,
     turn_count: AtomicUsize,
     state: Arc<RwLock<AgentState>>,
@@ -60,6 +60,8 @@ impl Agent {
             agent.config.curl_whitelist.clone(),
             agent.config.curl_blacklist.clone(),
         )));
+        agent.register_tool(Box::new(crate::tools::grep::GrepTool));
+        agent.register_tool(Box::new(crate::tools::glob::GlobTool));
 
         // Register subagent tool if enabled
         if agent.config.enable_subagent {
@@ -151,7 +153,7 @@ impl Agent {
 
     /// Register a custom tool.
     pub fn register_tool(&mut self, tool: Box<dyn Tool>) {
-        self.tools.insert(tool.name().to_string(), tool);
+        self.tools.insert(tool.name().to_string(), Arc::from(tool));
     }
 
     /// Unregister a tool by name.
@@ -248,7 +250,7 @@ impl Agent {
         let start_time = self.start_time.clone();
         let turn_count = Arc::new(AtomicUsize::new(0));
         let config = self.config.clone();
-        let tools = self
+        let tool_defs = self
             .tools
             .values()
             .map(|t| ToolDefinition {
@@ -257,6 +259,8 @@ impl Agent {
                 input_schema: t.input_schema(),
             })
             .collect();
+        // Clone the tool registry (Arc is cheap to clone) into the spawned task
+        let tool_registry = self.tools.clone();
         let client = AnthropicClient::new(&self.config);
 
         // Spawn the agent loop
@@ -268,7 +272,8 @@ impl Agent {
                 start_time,
                 turn_count,
                 config,
-                tools,
+                tool_defs,
+                tool_registry,
                 client,
                 system_prompt,
                 tx.clone(),
@@ -300,10 +305,13 @@ impl Agent {
         turn_count: Arc<AtomicUsize>,
         config: AgentConfig,
         tools: Vec<ToolDefinition>,
+        tool_registry: HashMap<String, Arc<dyn Tool>>,
         client: AnthropicClient,
         system_prompt: String,
         tx: mpsc::Sender<Event>,
     ) -> Result<(), AgentError> {
+        let mut consecutive_compact_failures: usize = 0;
+
         loop {
             // Check state
             {
@@ -354,6 +362,38 @@ impl Agent {
             }
 
             // Get current message history
+            let messages = {
+                let history = message_history.read().await;
+                history.clone()
+            };
+
+            // Auto compact check
+            if config.auto_compact {
+                let (compacted, failures) = crate::compact::auto_compact_if_needed(
+                    &config,
+                    &client,
+                    messages.clone(),
+                    consecutive_compact_failures,
+                )
+                .await;
+                if compacted.len() != messages.len() {
+                    // History was compacted, update it
+                    {
+                        let mut history = message_history.write().await;
+                        *history = compacted.clone();
+                    }
+                    let estimated = crate::compact::estimate_tokens(&compacted);
+                    let _ = tx
+                        .send(Event::Compact {
+                            message_count: compacted.len(),
+                            token_estimate: estimated,
+                        })
+                        .await;
+                }
+                consecutive_compact_failures = failures;
+            }
+
+            // Re-read messages after potential compaction
             let messages = {
                 let history = message_history.read().await;
                 history.clone()
@@ -470,6 +510,7 @@ impl Agent {
             let results = Self::execute_tools(
                 &tool_uses,
                 &config,
+                &tool_registry,
                 &message_history,
                 &tx,
             )
@@ -520,50 +561,143 @@ impl Agent {
     async fn execute_tools(
         tool_uses: &[ContentBlock],
         config: &AgentConfig,
+        tool_registry: &HashMap<String, Arc<dyn Tool>>,
         message_history: &Arc<RwLock<Vec<Message>>>,
         tx: &mpsc::Sender<Event>,
     ) -> Result<Vec<ContentBlock>, AgentError> {
-        let mut results = Vec::new();
-
-        // We need to look up tools - but we don't have access to self.tools here
-        // So we'll execute them all sequentially for now
-        // In a real implementation, you'd pass the tool registry
+        // Group by read-only vs write
+        let mut read_only: Vec<&ContentBlock> = Vec::new();
+        let mut write: Vec<&ContentBlock> = Vec::new();
 
         for block in tool_uses {
-            if let ContentBlock::ToolUse { name, id, input } = block {
-                let _ = tx
-                    .send(Event::ToolUseStart {
+            if let ContentBlock::ToolUse { name, .. } = block {
+                if let Some(tool) = tool_registry.get(name) {
+                    if tool.is_read_only() {
+                        read_only.push(block);
+                    } else {
+                        write.push(block);
+                    }
+                } else {
+                    // Unknown tool — treat as write (sequential)
+                    write.push(block);
+                }
+            }
+        }
+
+        let mut results = Vec::new();
+
+        // Concurrent read-only execution
+        if !read_only.is_empty() {
+            let read_futures: Vec<_> = read_only
+                .into_iter()
+                .map(|block| {
+                    let block = block.clone();
+                    async move { Self::execute_single_tool(block, config, tool_registry, message_history).await }
+                })
+                .collect();
+            let read_results = futures::future::join_all(read_futures).await;
+            for (result_block, block) in read_results.into_iter().zip(tool_uses.iter()) {
+                if let ContentBlock::ToolUse { name, id, input } = block {
+                    let _ = tx.send(Event::ToolUseStart {
                         name: name.clone(),
                         id: id.clone(),
                         input: input.clone(),
-                    })
-                    .await;
-
-                // For the spawned task, we need a different approach
-                // We'll return an error indicating the tool needs to be looked up
-                // In practice, this would be handled by passing the tool registry
-                let result = ToolResult::error(format!(
-                    "Tool '{}' execution requires agent context",
-                    name
-                ));
-
-                let _ = tx
-                    .send(Event::ToolUseEnd {
+                    }).await;
+                    // Extract result info from ContentBlock for the event
+                    let tool_result = if let ContentBlock::ToolResult { content, is_error, .. } = &result_block {
+                        ToolResult { content: content.clone(), is_error: is_error.unwrap_or(false) }
+                    } else {
+                        ToolResult::error("Unexpected result type")
+                    };
+                    let _ = tx.send(Event::ToolUseEnd {
                         name: name.clone(),
                         id: id.clone(),
-                        result: result.clone(),
-                    })
-                    .await;
+                        result: tool_result,
+                    }).await;
+                }
+                results.push(result_block);
+            }
+        }
 
-                results.push(ContentBlock::ToolResult {
-                    tool_use_id: id.clone(),
-                    content: result.content,
-                    is_error: Some(result.is_error),
-                });
+        // Sequential write execution
+        for block in &write {
+            if let ContentBlock::ToolUse { name, id, input } = block {
+                let _ = tx.send(Event::ToolUseStart {
+                    name: name.clone(),
+                    id: id.clone(),
+                    input: input.clone(),
+                }).await;
+
+                let result_block = Self::execute_single_tool(
+                    (*block).clone(),
+                    config,
+                    tool_registry,
+                    message_history,
+                )
+                .await;
+
+                // Extract result info from ContentBlock for the event
+                let tool_result = if let ContentBlock::ToolResult { content, is_error, .. } = &result_block {
+                    ToolResult { content: content.clone(), is_error: is_error.unwrap_or(false) }
+                } else {
+                    ToolResult::error("Unexpected result type")
+                };
+
+                let _ = tx.send(Event::ToolUseEnd {
+                    name: name.clone(),
+                    id: id.clone(),
+                    result: tool_result,
+                }).await;
+
+                results.push(result_block);
             }
         }
 
         Ok(results)
+    }
+
+    /// Execute a single tool.
+    async fn execute_single_tool(
+        block: ContentBlock,
+        config: &AgentConfig,
+        tool_registry: &HashMap<String, Arc<dyn Tool>>,
+        message_history: &Arc<RwLock<Vec<Message>>>,
+    ) -> ContentBlock {
+        if let ContentBlock::ToolUse { name, id, input } = block {
+            match tool_registry.get(&name) {
+                Some(tool) => {
+                    let history = message_history.read().await.clone();
+                    let ctx = crate::tool::ToolContext {
+                        work_dir: config.work_dir.clone(),
+                        message_history: history,
+                        allowed_read_dirs: config.allowed_read_dirs.clone(),
+                        allowed_write_dirs: config.allowed_write_dirs.clone(),
+                    };
+
+                    let result = match tool.call(input.clone(), &ctx).await {
+                        Ok(r) => r,
+                        Err(e) => ToolResult::error(e.to_string()),
+                    };
+
+                    ContentBlock::ToolResult {
+                        tool_use_id: id,
+                        content: result.content,
+                        is_error: Some(result.is_error),
+                    }
+                }
+                None => ContentBlock::ToolResult {
+                    tool_use_id: id,
+                    content: format!("Tool not found: {}", name),
+                    is_error: Some(true),
+                },
+            }
+        } else {
+            ContentBlock::ToolResult {
+                tool_use_id: String::new(),
+                content: "Invalid block type".to_string(),
+                is_error: Some(true),
+            }
+        }
     }
 
     /// Convert stream content block to agent content block.
@@ -609,7 +743,7 @@ mod tests {
 
         let agent = Agent::new(config);
         assert_eq!(agent.state().await, AgentState::Idle);
-        assert_eq!(agent.list_tools().len(), 5); // 5 built-in tools
+        assert_eq!(agent.list_tools().len(), 7); // 7 built-in tools
     }
 
     #[tokio::test]
@@ -733,8 +867,8 @@ mod tests {
         };
 
         let agent = Agent::new(config);
-        // Should have 6 tools: 5 built-in + subagent
-        assert_eq!(agent.list_tools().len(), 6);
+        // Should have 8 tools: 7 built-in + subagent
+        assert_eq!(agent.list_tools().len(), 8);
         assert!(agent.find_tool("subagent").is_some());
     }
 
@@ -748,8 +882,8 @@ mod tests {
         };
 
         let agent = Agent::new(config);
-        // Should have 5 tools only
-        assert_eq!(agent.list_tools().len(), 5);
+        // Should have 7 tools only
+        assert_eq!(agent.list_tools().len(), 7);
         assert!(agent.find_tool("subagent").is_none());
     }
 }

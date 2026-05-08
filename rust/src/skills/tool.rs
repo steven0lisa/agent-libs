@@ -147,6 +147,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: dir.path().to_path_buf(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
 
         let input = json!({"skill": "test-skill"});
@@ -168,6 +170,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: dir.path().to_path_buf(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
 
         let input = json!({"skill": "test-skill", "args": "some args here"});
@@ -193,6 +197,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: dir.path().to_path_buf(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
 
         let input = json!({"skill": "nonexistent"});
@@ -219,6 +225,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: dir.path().to_path_buf(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
 
         let input = json!({});

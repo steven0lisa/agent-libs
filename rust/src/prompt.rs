@@ -1,6 +1,7 @@
 //! System prompt builder.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::skills::types::SkillInfo;
 use crate::tool::Tool;
@@ -62,7 +63,7 @@ Important:
 
 /// Build the system prompt with tool descriptions and optional skills section.
 pub fn build_system_prompt(
-    tools: &HashMap<String, Box<dyn Tool>>,
+    tools: &HashMap<String, Arc<dyn Tool>>,
     custom_prompt: Option<&str>,
     enable_subagent: bool,
     subagent_max_turns: usize,
@@ -147,8 +148,8 @@ mod tests {
 
     #[test]
     fn test_build_system_prompt_basic() {
-        let mut tools: HashMap<String, Box<dyn Tool>> = HashMap::new();
-        tools.insert("test_tool".to_string(), Box::new(TestTool));
+        let mut tools: HashMap<String, Arc<dyn Tool>> = HashMap::new();
+        tools.insert("test_tool".to_string(), Arc::new(TestTool));
 
         let prompt = build_system_prompt(&tools, None, false, 50, &[]);
 
@@ -160,7 +161,7 @@ mod tests {
 
     #[test]
     fn test_build_system_prompt_with_subagent() {
-        let tools: HashMap<String, Box<dyn Tool>> = HashMap::new();
+        let tools: HashMap<String, Arc<dyn Tool>> = HashMap::new();
 
         let prompt = build_system_prompt(&tools, None, true, 50, &[]);
 
@@ -170,7 +171,7 @@ mod tests {
 
     #[test]
     fn test_build_system_prompt_with_custom() {
-        let tools: HashMap<String, Box<dyn Tool>> = HashMap::new();
+        let tools: HashMap<String, Arc<dyn Tool>> = HashMap::new();
 
         let prompt = build_system_prompt(&tools, Some("Be extra careful"), false, 50, &[]);
 
@@ -180,8 +181,8 @@ mod tests {
 
     #[test]
     fn test_build_system_prompt_tools_section() {
-        let mut tools: HashMap<String, Box<dyn Tool>> = HashMap::new();
-        tools.insert("test_tool".to_string(), Box::new(TestTool));
+        let mut tools: HashMap<String, Arc<dyn Tool>> = HashMap::new();
+        tools.insert("test_tool".to_string(), Arc::new(TestTool));
 
         let prompt = build_system_prompt(&tools, None, false, 50, &[]);
 
@@ -192,7 +193,7 @@ mod tests {
 
     #[test]
     fn test_build_system_prompt_with_skills() {
-        let tools: HashMap<String, Box<dyn Tool>> = HashMap::new();
+        let tools: HashMap<String, Arc<dyn Tool>> = HashMap::new();
 
         let skills = vec![crate::skills::types::SkillInfo {
             metadata: crate::skills::types::SkillMetadata {

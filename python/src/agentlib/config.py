@@ -61,6 +61,13 @@ class AgentConfig:
     bash_blacklist: list[Pattern] = field(default_factory=list)
     curl_whitelist: list[Pattern] = field(default_factory=list)
     curl_blacklist: list[Pattern] = field(default_factory=list)
+    # Auto Compact
+    auto_compact: bool = True
+    context_window_size: int = 200_000
+    auto_compact_threshold_pct: float = 0.8
+    # Directory access control
+    allowed_read_dirs: list[str] = field(default_factory=list)
+    allowed_write_dirs: list[str] = field(default_factory=list)
 
     # All configuration must be provided explicitly by the caller.
     # The library does not read environment variables, to support

@@ -89,4 +89,43 @@ export class AnthropicClient {
       clearTimeout(timer);
     }
   }
+
+  async sendMessages(
+    messages: Message[],
+    system: string,
+    tools: ToolDefinition[],
+  ): Promise<{ content: Array<{ type: string; text?: string }> }> {
+    const request = {
+      model: this.config.model,
+      messages,
+      system,
+      tools,
+      max_tokens: this.config.maxTokens,
+      stream: false,
+    };
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.config.timeoutMs);
+
+    try {
+      const response = await fetch(`${this.config.baseUrl}/v1/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.config.apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify(request),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+      }
+
+      return (await response.json()) as { content: Array<{ type: string; text?: string }> };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 }

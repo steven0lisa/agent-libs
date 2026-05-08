@@ -53,7 +53,11 @@ class UpdateFileTool:
         replace_all = input.get("replace_all", False)
 
         try:
-            resolved = resolve_safe_path(file_path, context.work_dir)
+            resolved = resolve_safe_path(
+                file_path,
+                context.work_dir,
+                context.allowed_write_dirs,
+            )
         except ValueError as e:
             return ToolResult.error(str(e))
 

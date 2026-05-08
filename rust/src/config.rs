@@ -134,6 +134,16 @@ pub struct AgentConfig {
     pub include_project_skills: bool,
     /// Project directory for scanning project-local skills (default: cwd).
     pub skills_project_dir: Option<PathBuf>,
+    /// Whether to automatically compact conversation history when context window is nearly full.
+    pub auto_compact: bool,
+    /// Total context window size in tokens.
+    pub context_window_size: u32,
+    /// Percentage of context window usage that triggers auto-compact (0.0 - 1.0).
+    pub auto_compact_threshold_pct: f64,
+    /// Directories that tools are allowed to read from (empty = all within work_dir).
+    pub allowed_read_dirs: Vec<PathBuf>,
+    /// Directories that tools are allowed to write to (empty = all within work_dir).
+    pub allowed_write_dirs: Vec<PathBuf>,
 }
 
 impl Default for AgentConfig {
@@ -166,6 +176,11 @@ impl Default for AgentConfig {
             skills_dir: None,
             include_project_skills: false,
             skills_project_dir: None,
+            auto_compact: true,
+            context_window_size: 200_000,
+            auto_compact_threshold_pct: 0.8,
+            allowed_read_dirs: Vec::new(),
+            allowed_write_dirs: Vec::new(),
         }
     }
 }

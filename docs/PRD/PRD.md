@@ -176,6 +176,11 @@ Agent 运行所需的外部配置：
 | system_prompt | - | 系统提示词，追加到默认提示词 |
 | output_format | - | 输出格式: "text"(默认) 或 "json" |
 | callback | - | 响应回调函数，每步事件触发 |
+| auto_compact | - | 是否启用自动压缩，默认 true |
+| context_window_size | - | 模型上下文窗口大小，默认 200000 |
+| auto_compact_threshold_pct | - | 自动压缩触发阈值百分比，默认 0.8（80%） |
+| allowed_read_dirs | - | 允许读取的目录列表（空列表表示仅 work_dir） |
+| allowed_write_dirs | - | 允许写入的目录列表（空列表表示仅 work_dir） |
 
 **配置优先级**：构造函数参数 > 环境变量 > 默认值
 
@@ -245,6 +250,13 @@ struct AgentConfig {
   bash_blacklist: Pattern[]  // Bash 黑名单
   curl_whitelist: Pattern[]  // Curl 白名单
   curl_blacklist: Pattern[]  // Curl 黑名单
+  // Auto Compact
+  auto_compact: bool         // 默认: true，是否启用自动上下文压缩
+  context_window_size: int   // 默认: 200000，模型上下文窗口大小
+  auto_compact_threshold_pct: float  // 默认: 0.8，触发阈值百分比
+  // 目录访问控制
+  allowed_read_dirs: string[]   // 允许读取的目录（空=仅 work_dir）
+  allowed_write_dirs: string[]  // 允许写入的目录（空=仅 work_dir）
 }
 ```
 
@@ -296,6 +308,7 @@ enum EventType {
   ERROR                // 发生错误
   COMPLETE             // 整个任务完成
   TURN_START           // 新一轮对话开始
+  COMPACT              // 上下文压缩事件
 }
 
 interface Event {
@@ -382,20 +395,90 @@ When executing commands via bash:
 
 ### 3.6 文件安全（File Sandbox）
 
-所有文件操作（read_file, write_file, update_file）被限制在工作目录内：
+所有文件操作（read_file, write_file, update_file）被限制在允许的目录内：
 
-1. **路径解析**：所有相对路径基于 `work_dir` 解析，所有绝对路径必须位于 `work_dir` 下
-2. **越界检查**：使用 `path.resolve()` 后检查是否为 `work_dir` 的子路径
-3. **禁止符号链接逃逸**：解析后检查真实路径（canonical path）
-4. **失败处理**：越界时返回 tool_result（is_error=true），不抛出异常
+1. **路径解析**：所有相对路径基于 `work_dir` 解析
+2. **允许目录检查**：
+   - `allowed_read_dirs`：允许读取的目录列表（空列表表示仅 `work_dir`）
+   - `allowed_write_dirs`：允许写入的目录列表（空列表表示仅 `work_dir`）
+   - Skill 目录默认可读（不受 `allowed_read_dirs` 限制）
+   - `work_dir` 始终可读写
+3. **越界检查**：使用 `path.resolve()` 后检查是否为任一允许目录的子路径
+4. **禁止符号链接逃逸**：解析后检查真实路径（canonical path）
+5. **失败处理**：越界时返回 tool_result（is_error=true），不抛出异常
 
 ```
-resolve_and_check(file_path, work_dir):
+resolve_and_check(file_path, work_dir, allowed_dirs):
   resolved = work_dir.resolve(file_path).canonical()
-  if !resolved.starts_with(work_dir.canonical()):
-    return ERROR("Path escapes working directory")
-  return resolved
+  // 检查是否在 work_dir 或任一 allowed_dirs 内
+  if is_subpath(resolved, work_dir):
+    return resolved
+  for dir in allowed_dirs:
+    if is_subpath(resolved, dir):
+      return resolved
+  return ERROR("Path escapes allowed directories")
 ```
+
+### 3.6.1 自动上下文压缩（Auto Compact）
+
+当对话历史增长到接近模型上下文窗口限制时，自动压缩历史消息以保持系统性能。参考 Claude Code 的 auto compact 机制。
+
+**触发条件**：
+
+```
+estimated_tokens(message_history) >= context_window_size * auto_compact_threshold_pct
+```
+
+**压缩流程**：
+
+```
+┌───────────────────────────────────────────────────────┐
+│                  Auto Compact Flow                     │
+│                                                       │
+│  ┌─────────────────┐                                  │
+│  │ 估算消息历史 tokens│                                 │
+│  └────────┬────────┘                                  │
+│           │                                            │
+│           ▼                                            │
+│  ┌─────────────────────┐                              │
+│  │ 超过阈值？           │                              │
+│  └────┬──────────┬─────┘                              │
+│      否          是                                    │
+│       │           │                                    │
+│       ▼           ▼                                    │
+│  继续执行    ┌───────────────┐                         │
+│             │ 保留最近N条消息 │                         │
+│             └───────┬───────┘                         │
+│                     │                                  │
+│                     ▼                                  │
+│            ┌────────────────┐                          │
+│            │ API 生成摘要    │                          │
+│            │ 压缩旧消息      │                          │
+│            └───────┬────────┘                         │
+│                    │                                   │
+│                    ▼                                   │
+│            ┌──────────────────┐                       │
+│            │ 替换消息历史      │                       │
+│            │ [摘要] + [最近消息]│                      │
+│            └──────────────────┘                       │
+└───────────────────────────────────────────────────────┘
+```
+
+**配置选项**：
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `auto_compact` | `true` | 是否启用自动压缩 |
+| `context_window_size` | `200000` | 模型上下文窗口大小（tokens） |
+| `auto_compact_threshold_pct` | `0.8` | 触发阈值百分比（0.0-1.0） |
+
+**压缩策略**：
+
+1. **Token 估算**：使用启发式方法估算消息历史的 token 数（~4字符/token）
+2. **保留策略**：保留最近的消息（至少保留最近 5 条），确保工具调用/结果配对完整性
+3. **摘要生成**：使用同一 API 调用生成压缩摘要，替换旧消息
+4. **断路器**：最多连续 3 次压缩失败后停止尝试，避免无限重试
+5. **事件通知**：压缩时发出 `COMPACT` 事件，调用者可通过事件流感知
 
 ### 3.7 Bash 安全策略
 

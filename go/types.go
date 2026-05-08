@@ -205,6 +205,7 @@ const (
 	EventToolUseEnd    EventType = "tool_use_end"
 	EventError         EventType = "error"
 	EventComplete      EventType = "complete"
+	EventCompact       EventType = "compact"
 )
 
 // Event represents an event in the agent's execution.

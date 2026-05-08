@@ -76,6 +76,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: work_dir.clone(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
         let input = json!({"file_path": "test.txt", "content": "hello world"});
 
@@ -98,6 +100,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: work_dir.clone(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
         let input = json!({"file_path": "a/b/c/test.txt", "content": "nested"});
 
@@ -117,6 +121,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: work_dir.clone(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
         let input = json!({"file_path": "../outside.txt", "content": "bad"});
 
@@ -134,6 +140,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: work_dir.clone(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
         let input = json!({"file_path": "test.txt", "content": "new"});
 

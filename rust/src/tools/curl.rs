@@ -147,6 +147,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: work_dir.clone(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
         let input = json!({"url": "https://httpbin.org/get"});
 
@@ -175,6 +177,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: work_dir.clone(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
         let input = json!({"url": "http://internal.example.com/api"});
 
@@ -194,6 +198,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: work_dir.clone(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
         let input = json!({"url": "http://safe.example.com/api"});
 
@@ -220,6 +226,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: work_dir.clone(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
         let input = json!({
             "url": "https://httpbin.org/post",

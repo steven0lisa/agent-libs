@@ -123,6 +123,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: work_dir.clone(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
         let input = json!({"command": "echo hello"});
 
@@ -140,6 +142,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: work_dir.clone(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
         let input = json!({"command": "echo error >&2"});
 
@@ -158,6 +162,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: work_dir.clone(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
         let input = json!({"command": "rm -rf /"});
 
@@ -178,6 +184,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: work_dir.clone(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
         let input = json!({"command": "rm safe_file.txt"});
 
@@ -195,6 +203,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: work_dir.clone(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
         let input = json!({"command": "sleep 10", "timeout": 100});
 
@@ -212,6 +222,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: work_dir.clone(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
         let input = json!({"command": "pwd"});
 

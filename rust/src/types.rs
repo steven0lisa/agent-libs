@@ -114,6 +114,11 @@ pub enum Event {
     Error {
         message: String,
     },
+    /// Conversation was auto-compacted.
+    Compact {
+        message_count: usize,
+        token_estimate: usize,
+    },
     /// Agent execution completed.
     Complete {
         final_content: String,

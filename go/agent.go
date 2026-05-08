@@ -24,6 +24,16 @@ const (
 	AgentStateError     AgentState = "error"
 )
 
+// toolProviders holds functions that register tools on a new agent.
+// Tool packages can register themselves via RegisterToolProvider.
+var toolProviders []func(*Agent)
+
+// RegisterToolProvider registers a function that adds tools to a new agent.
+// This is used by tool packages to avoid circular imports with agentlib.
+func RegisterToolProvider(provider func(*Agent)) {
+	toolProviders = append(toolProviders, provider)
+}
+
 // Agent is the core agent implementation with lifecycle management.
 type Agent struct {
 	config         Config
@@ -54,6 +64,11 @@ func NewAgent(cfg Config) *Agent {
 		callback:       cfg.Callback,
 	}
 	a.pauseCond = sync.NewCond(&a.mu)
+
+	// Register tools from providers (set by tool packages via init())
+	for _, provider := range toolProviders {
+		provider(a)
+	}
 
 	if cfg.EnableSkills {
 		a.initSkills()
@@ -293,6 +308,7 @@ func (a *Agent) runLoop(ctx context.Context, events chan<- Event) {
 
 	systemPrompt := BuildSystemPrompt(tools, cfg.SystemPrompt, cfg.EnableSubagent, cfg.SubagentMaxTurns, a.loadedSkills)
 	client := NewAPIClient(cfg)
+	consecutiveCompactFailures := 0
 
 	for {
 		// Check stop
@@ -342,6 +358,28 @@ func (a *Agent) runLoop(ctx context.Context, events chan<- Event) {
 		// Build messages for API
 		a.mu.RLock()
 		messages := make([]Message, len(a.messageHistory))
+		copy(messages, a.messageHistory)
+		a.mu.RUnlock()
+
+		// Auto compact check
+		if cfg.AutoCompact {
+			compacted, failures := AutoCompactIfNeeded(ctx, cfg, client, messages, consecutiveCompactFailures)
+			if len(compacted) != len(messages) {
+				a.mu.Lock()
+				a.messageHistory = compacted
+				a.mu.Unlock()
+				estimated := EstimateTokens(compacted)
+				a.emit(events, Event{Type: EventCompact, Data: map[string]any{
+					"message_count":  len(compacted),
+					"token_estimate": estimated,
+				}})
+			}
+			consecutiveCompactFailures = failures
+		}
+
+		// Rebuild messages from potentially compacted history
+		a.mu.RLock()
+		messages = make([]Message, len(a.messageHistory))
 		copy(messages, a.messageHistory)
 		a.mu.RUnlock()
 

@@ -27,13 +27,13 @@ class TestResolveSafePath:
         with tempfile.TemporaryDirectory() as tmpdir:
             with pytest.raises(ValueError) as exc_info:
                 resolve_safe_path("../outside.txt", tmpdir)
-            assert "escapes working directory" in str(exc_info.value)
+            assert "escapes" in str(exc_info.value)
 
     def test_deep_escape(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             with pytest.raises(ValueError) as exc_info:
                 resolve_safe_path("a/../../outside.txt", tmpdir)
-            assert "escapes working directory" in str(exc_info.value)
+            assert "escapes" in str(exc_info.value)
 
     def test_symlink_not_tested(self):
         """Symlink escape tests are platform-dependent; skip for simplicity."""

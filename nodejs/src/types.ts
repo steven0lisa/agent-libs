@@ -38,7 +38,8 @@ export type EventType =
   | 'tool_use_start'
   | 'tool_use_end'
   | 'error'
-  | 'complete';
+  | 'complete'
+  | 'compact';
 
 export interface Event {
   type: EventType;
@@ -79,6 +80,10 @@ export function errorEvent(message: string): Event {
 
 export function completeEvent(finalContent: string): Event {
   return { type: 'complete', data: { final_content: finalContent } };
+}
+
+export function compactEvent(messageCount: number, tokenEstimate: number): Event {
+  return { type: 'compact', data: { message_count: messageCount, token_estimate: tokenEstimate } };
 }
 
 export interface ToolResult {

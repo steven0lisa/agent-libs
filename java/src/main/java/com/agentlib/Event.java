@@ -5,6 +5,7 @@ package com.agentlib;
  */
 public sealed interface Event permits
     TurnStartEvent, MessageStartEvent, MessageDeltaEvent, ThinkingDeltaEvent,
-    MessageEndEvent, ToolUseStartEvent, ToolUseEndEvent, ErrorEvent, CompleteEvent {
+    MessageEndEvent, ToolUseStartEvent, ToolUseEndEvent, ErrorEvent, CompleteEvent,
+    CompactEvent {
     String type();
 }

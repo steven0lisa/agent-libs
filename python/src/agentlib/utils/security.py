@@ -8,21 +8,43 @@ from pathlib import Path
 from ..config import Pattern
 
 
-def resolve_safe_path(file_path: str, work_dir: str) -> Path:
-    """Resolve a path and ensure it stays within the working directory.
+def resolve_safe_path(
+    file_path: str,
+    work_dir: str,
+    allowed_dirs: list[str] | None = None,
+) -> Path:
+    """Resolve a path and ensure it stays within allowed directories.
+
+    If allowed_dirs is empty or None, only work_dir is allowed.
+    work_dir is always implicitly allowed.
 
     Returns the resolved path if valid.
-    Raises ValueError if the path escapes the working directory.
+    Raises ValueError if the path escapes all allowed directories.
     """
     work_abs = os.path.abspath(work_dir)
     target_abs = os.path.normpath(os.path.join(work_abs, file_path))
 
-    work_real = os.path.realpath(work_abs)
-    target_real = os.path.realpath(target_abs)
-    if os.path.commonpath([work_real, target_real]) != work_real:
-        raise ValueError(f"Path '{file_path}' escapes working directory '{work_dir}'")
+    # Collect all allowed directories (work_dir is always allowed)
+    all_allowed = [os.path.realpath(work_abs)]
+    if allowed_dirs:
+        for d in allowed_dirs:
+            all_allowed.append(os.path.realpath(os.path.abspath(d)))
 
-    return Path(target_abs)
+    target_real = os.path.realpath(target_abs)
+
+    # Check if target is under any allowed directory
+    for allowed_dir in all_allowed:
+        try:
+            if os.path.commonpath([allowed_dir, target_real]) == allowed_dir:
+                return Path(target_abs)
+        except ValueError:
+            # Different drives on Windows
+            continue
+
+    raise ValueError(
+        f"Path '{file_path}' escapes allowed directories. "
+        f"Allowed: {[str(d) for d in all_allowed]}"
+    )
 
 
 def check_security_policy(

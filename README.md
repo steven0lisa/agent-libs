@@ -28,6 +28,40 @@
 - `curl`：HTTP 请求
 - `subagent`：子 Agent 调用
 
+## Auto Compact
+
+当对话历史增长接近模型上下文窗口限制时，Agent 会自动压缩历史消息以保持性能。
+
+- 默认启用，可通过配置关闭
+- 触发阈值默认为上下文窗口的 80%（200K * 0.8 = 160K tokens）
+- 压缩时通过 API 生成摘要替换旧消息，保留最近的消息
+
+```python
+config = AgentConfig(
+    api_key="...",
+    auto_compact=True,               # 是否启用自动压缩（默认 True）
+    context_window_size=200_000,     # 模型上下文窗口大小
+    auto_compact_threshold_pct=0.8,  # 触发阈值百分比
+)
+```
+
+## 目录访问控制
+
+可以配置 Agent 允许读写的目录列表：
+
+```python
+config = AgentConfig(
+    api_key="...",
+    work_dir="/project",
+    allowed_read_dirs=["/data", "/logs"],    # 允许读取的额外目录
+    allowed_write_dirs=["/output"],           # 允许写入的额外目录
+)
+```
+
+- `work_dir` 始终可读写
+- 空列表表示仅 `work_dir` 可访问（默认行为，向后兼容）
+- Skill 目录默认可读
+
 ## 基本使用说明（各语言）
 
 下面示例均为“打印流式输出 + 最终结果”的最小用法，你只需要准备好 API Key 环境变量即可运行/集成。
@@ -244,7 +278,23 @@ pytest -q
 
 ### Rust
 
-在你的项目中通过路径依赖使用（单仓多语言场景常用）：
+在你的项目中通过 GitHub 引用（推荐）：
+
+```toml
+[dependencies]
+agentlib = { git = "https://github.com/steven0lisa/agent-libs.git", subdir = "rust" }
+```
+
+或指定分支/标签：
+
+```toml
+[dependencies]
+agentlib = { git = "https://github.com/steven0lisa/agent-libs.git", subdir = "rust", branch = "main" }
+# 或指定 tag
+# agentlib = { git = "https://github.com/steven0lisa/agent-libs.git", subdir = "rust", tag = "v0.1.0" }
+```
+
+也可以通过本地路径引用（适合开发调试）：
 
 ```toml
 [dependencies]

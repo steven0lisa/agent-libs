@@ -50,6 +50,11 @@ public class AgentConfig {
     private final Path skillsDir;
     private final boolean includeProjectSkills;
     private final Path skillsProjectDir;
+    private final boolean autoCompact;
+    private final int contextWindowSize;
+    private final double autoCompactThresholdPct;
+    private final List<Path> allowedReadDirs;
+    private final List<Path> allowedWriteDirs;
 
     private AgentConfig(Builder builder) {
         this.baseUrl = builder.baseUrl != null ? builder.baseUrl : "https://api.anthropic.com";
@@ -74,6 +79,11 @@ public class AgentConfig {
         this.skillsDir = builder.skillsDir;
         this.includeProjectSkills = builder.includeProjectSkills;
         this.skillsProjectDir = builder.skillsProjectDir;
+        this.autoCompact = builder.autoCompact;
+        this.contextWindowSize = builder.contextWindowSize > 0 ? builder.contextWindowSize : 200000;
+        this.autoCompactThresholdPct = builder.autoCompactThresholdPct > 0 ? builder.autoCompactThresholdPct : 0.8;
+        this.allowedReadDirs = builder.allowedReadDirs != null ? List.copyOf(builder.allowedReadDirs) : List.of();
+        this.allowedWriteDirs = builder.allowedWriteDirs != null ? List.copyOf(builder.allowedWriteDirs) : List.of();
     }
 
     public String baseUrl() { return baseUrl; }
@@ -98,6 +108,11 @@ public class AgentConfig {
     public Path skillsDir() { return skillsDir; }
     public boolean includeProjectSkills() { return includeProjectSkills; }
     public Path skillsProjectDir() { return skillsProjectDir; }
+    public boolean autoCompact() { return autoCompact; }
+    public int contextWindowSize() { return contextWindowSize; }
+    public double autoCompactThresholdPct() { return autoCompactThresholdPct; }
+    public List<Path> allowedReadDirs() { return allowedReadDirs; }
+    public List<Path> allowedWriteDirs() { return allowedWriteDirs; }
 
     public static Builder builder() {
         return new Builder();
@@ -129,6 +144,11 @@ public class AgentConfig {
         private Path skillsDir;
         private boolean includeProjectSkills;
         private Path skillsProjectDir;
+        private boolean autoCompact = true;
+        private int contextWindowSize;
+        private double autoCompactThresholdPct;
+        private List<Path> allowedReadDirs;
+        private List<Path> allowedWriteDirs;
 
         public Builder baseUrl(String baseUrl) {
             this.baseUrl = baseUrl;
@@ -237,6 +257,31 @@ public class AgentConfig {
 
         public Builder skillsProjectDir(Path skillsProjectDir) {
             this.skillsProjectDir = skillsProjectDir;
+            return this;
+        }
+
+        public Builder autoCompact(boolean autoCompact) {
+            this.autoCompact = autoCompact;
+            return this;
+        }
+
+        public Builder contextWindowSize(int contextWindowSize) {
+            this.contextWindowSize = contextWindowSize;
+            return this;
+        }
+
+        public Builder autoCompactThresholdPct(double autoCompactThresholdPct) {
+            this.autoCompactThresholdPct = autoCompactThresholdPct;
+            return this;
+        }
+
+        public Builder allowedReadDirs(List<Path> allowedReadDirs) {
+            this.allowedReadDirs = allowedReadDirs;
+            return this;
+        }
+
+        public Builder allowedWriteDirs(List<Path> allowedWriteDirs) {
+            this.allowedWriteDirs = allowedWriteDirs;
             return this;
         }
 

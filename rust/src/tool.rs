@@ -12,6 +12,10 @@ pub struct ToolContext {
     pub work_dir: std::path::PathBuf,
     /// Current message history.
     pub message_history: Vec<Message>,
+    /// Directories that tools are allowed to read from (empty = all within work_dir).
+    pub allowed_read_dirs: Vec<std::path::PathBuf>,
+    /// Directories that tools are allowed to write to (empty = all within work_dir).
+    pub allowed_write_dirs: Vec<std::path::PathBuf>,
 }
 
 /// Result of a tool execution.

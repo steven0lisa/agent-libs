@@ -92,6 +92,11 @@ impl Tool for SubAgentTool {
             skills_dir: None,
             include_project_skills: false,
             skills_project_dir: None,
+            auto_compact: self.parent_config.auto_compact,
+            context_window_size: self.parent_config.context_window_size,
+            auto_compact_threshold_pct: self.parent_config.auto_compact_threshold_pct,
+            allowed_read_dirs: self.parent_config.allowed_read_dirs.clone(),
+            allowed_write_dirs: self.parent_config.allowed_write_dirs.clone(),
         };
 
         // Create subagent with forked context
@@ -156,6 +161,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: work_dir.clone(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
         let input = json!({"task": ""});
 
@@ -177,6 +184,8 @@ mod tests {
         let ctx = ToolContext {
             work_dir: work_dir.clone(),
             message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
         };
         let input = json!({});
 

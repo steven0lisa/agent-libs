@@ -50,6 +50,13 @@ export interface AgentConfig {
   includeProjectSkills?: boolean;
   /** Project root for project-level skills discovery. */
   skillsProjectDir?: string;
+
+  /** Enable auto-compaction of conversation history. */
+  autoCompact?: boolean;
+  /** Context window size in tokens (used for auto-compact threshold). */
+  contextWindowSize?: number;
+  /** Percentage (0-1) of context window at which to trigger auto-compact. */
+  autoCompactThresholdPct?: number;
 }
 
 export const DEFAULT_CONFIG = {
@@ -64,6 +71,9 @@ export const DEFAULT_CONFIG = {
   enableSubagent: false,
   subagentMaxTurns: 50,
   enableSkills: false,
+  autoCompact: true,
+  contextWindowSize: 200_000,
+  autoCompactThresholdPct: 0.8,
 };
 
 export function resolveConfig(config: AgentConfig): Required<AgentConfig> {
@@ -94,6 +104,9 @@ export function resolveConfig(config: AgentConfig): Required<AgentConfig> {
     skillsDir: config.skillsDir || join(homedir(), '.claude', 'skills'),
     includeProjectSkills: config.includeProjectSkills ?? false,
     skillsProjectDir: config.skillsProjectDir || process.cwd(),
+    autoCompact: config.autoCompact ?? DEFAULT_CONFIG.autoCompact,
+    contextWindowSize: config.contextWindowSize ?? DEFAULT_CONFIG.contextWindowSize,
+    autoCompactThresholdPct: config.autoCompactThresholdPct ?? DEFAULT_CONFIG.autoCompactThresholdPct,
   };
 }
 

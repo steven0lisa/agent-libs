@@ -26,6 +26,7 @@ from .types import (
     ToolUseBlock,
 )
 from .utils.security import check_security_policy, resolve_safe_path
+from .compact import auto_compact_if_needed, estimate_tokens
 
 
 class AgentState(Enum):
@@ -50,6 +51,7 @@ class Agent:
         self._start_time: Optional[float] = None
         self._skill_loader: SkillLoader | None = None
         self._loaded_skills: list | None = None
+        self._compact_failures = 0  # Circuit breaker for auto compact
 
         # Lifecycle state
         self._state = AgentState.IDLE
@@ -221,6 +223,26 @@ class Agent:
                 self._turn_count += 1
                 yield emit(Event.turn_start(self._turn_count))
 
+                # Auto compact: check if we need to compress the conversation
+                if self._config.auto_compact:
+                    try:
+                        old_len = len(self._message_history)
+                        self._message_history, self._compact_failures = (
+                            await auto_compact_if_needed(
+                                self._config,
+                                client,
+                                self._message_history,
+                                self._compact_failures,
+                            )
+                        )
+                        new_len = len(self._message_history)
+                        if new_len < old_len:
+                            token_est = estimate_tokens(self._message_history)
+                            yield emit(Event.compact(new_len, token_est))
+                    except Exception:
+                        # Compact failure should not break the agent loop
+                        self._compact_failures += 1
+
                 # Check duration limit
                 if self._config.max_duration_ms > 0 and self._start_time:
                     elapsed = (time.time() - self._start_time) * 1000
@@ -390,6 +412,8 @@ class Agent:
         context = ToolContext(
             work_dir=self._config.work_dir,
             message_history=list(self._message_history),
+            allowed_read_dirs=self._config.allowed_read_dirs,
+            allowed_write_dirs=self._config.allowed_write_dirs,
         )
 
         try:
