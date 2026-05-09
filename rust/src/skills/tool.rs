@@ -7,6 +7,7 @@ use crate::skills::loader::SkillLoader;
 use crate::skills::substitution::substitute_variables;
 use crate::skills::types::SkillInfo;
 use crate::tool::{Tool, ToolContext, ToolError, ToolResult};
+use crate::types::{ContentBlock, Message, Role};
 
 /// Tool to load a skill and get its instructions.
 ///
@@ -28,9 +29,24 @@ impl Tool for SkillTool {
         "skill"
     }
 
-    fn description(&self) -> &str {
-        "Load a skill and get its instructions. \
-         Skills provide specialized capabilities for specific tasks."
+    fn description(&self) -> String {
+        let mut desc = "Load a skill and get its instructions. \
+             Skills provide specialized capabilities for specific tasks.".to_string();
+        let skills = self.loader.discover_all();
+        let invocable: Vec<_> = skills.iter().filter(|s| s.metadata.user_invocable).collect();
+        if !invocable.is_empty() {
+            desc.push_str("\n\nAvailable skills:\n");
+            for skill in &invocable {
+                let line = if skill.metadata.description.is_empty() {
+                    format!("- {}", skill.metadata.name)
+                } else {
+                    format!("- {}: {}", skill.metadata.name, skill.metadata.description)
+                };
+                desc.push_str(&line);
+                desc.push('\n');
+            }
+        }
+        desc
     }
 
     fn is_read_only(&self) -> bool {
@@ -91,13 +107,18 @@ impl Tool for SkillTool {
             Some(&skill.dir_path.to_string_lossy()),
         );
 
-        let result = build_skill_result(&skill, &processed_content);
-        Ok(ToolResult::success(result))
+        let full_content = build_skill_injection_content(&skill, &processed_content);
+        let brief = format!("Skill loaded: {}", skill.metadata.name);
+        let injection_msg = Message {
+            role: Role::User,
+            content: vec![ContentBlock::Text { text: full_content }],
+        };
+        Ok(ToolResult::success_with_messages(brief, vec![injection_msg]))
     }
 }
 
-/// Build the formatted result string from a skill.
-fn build_skill_result(skill: &SkillInfo, content: &str) -> String {
+/// Build the formatted injection content from a skill.
+fn build_skill_injection_content(skill: &SkillInfo, content: &str) -> String {
     let mut parts: Vec<String> = Vec::new();
 
     parts.push(format!("## Skill: {}", skill.metadata.name));
@@ -142,7 +163,7 @@ mod tests {
         fs::create_dir_all(&skill_dir).unwrap();
         fs::write(
             skill_dir.join("SKILL.md"),
-            "---\nname: test-skill\ndescription: A test skill\nwhen_to_use: When testing\n---\n\nDo something with $ARGUMENTS",
+            "---\nname: test-skill\ndescription: A test skill\nwhen_to_use: When testing\nuser_invocable: true\n---\n\nDo something with $ARGUMENTS",
         )
         .unwrap();
 
@@ -171,10 +192,20 @@ mod tests {
         let result = tool.call(input, &ctx).await.unwrap();
 
         assert!(!result.is_error);
-        assert!(result.content.contains("Skill: test-skill"));
-        assert!(result.content.contains("Description: A test skill"));
-        assert!(result.content.contains("When to use: When testing"));
-        assert!(result.content.contains("Do something with"));
+        // Content is now a brief confirmation
+        assert_eq!(result.content, "Skill loaded: test-skill");
+        // Skill content is injected via new_messages
+        assert_eq!(result.new_messages.len(), 1);
+        let msg = &result.new_messages[0];
+        assert_eq!(msg.role, Role::User);
+        if let ContentBlock::Text { text } = &msg.content[0] {
+            assert!(text.contains("Skill: test-skill"));
+            assert!(text.contains("Description: A test skill"));
+            assert!(text.contains("When to use: When testing"));
+            assert!(text.contains("Do something with"));
+        } else {
+            panic!("Expected Text content block");
+        }
     }
 
     #[tokio::test]
@@ -195,7 +226,12 @@ mod tests {
         let result = tool.call(input, &ctx).await.unwrap();
 
         assert!(!result.is_error);
-        assert!(result.content.contains("Do something with some args here"));
+        // Check args substitution in injected message
+        if let ContentBlock::Text { text } = &result.new_messages[0].content[0] {
+            assert!(text.contains("Do something with some args here"));
+        } else {
+            panic!("Expected Text content block");
+        }
     }
 
     #[tokio::test]
@@ -284,7 +320,12 @@ mod tests {
         let result = tool.call(input, &ctx).await.unwrap();
 
         assert!(!result.is_error);
-        assert!(result.content.contains("only use these tools: bash, read_file"));
+        // Check hint in injected message
+        if let ContentBlock::Text { text } = &result.new_messages[0].content[0] {
+            assert!(text.contains("only use these tools: bash, read_file"));
+        } else {
+            panic!("Expected Text content block");
+        }
     }
 
     #[tokio::test]
@@ -317,6 +358,55 @@ mod tests {
         let result = tool.call(input, &ctx).await.unwrap();
 
         assert!(!result.is_error);
-        assert!(result.content.contains("should be executed in a fork context"));
+        // Check fork hint in injected message
+        if let ContentBlock::Text { text } = &result.new_messages[0].content[0] {
+            assert!(text.contains("should be executed in a fork context"));
+        } else {
+            panic!("Expected Text content block");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_skill_tool_description_lists_skills() {
+        let dir = tempfile::TempDir::new().unwrap();
+
+        // Create two user-invocable skills
+        let skill_dir1 = dir.path().join("skill-a");
+        fs::create_dir_all(&skill_dir1).unwrap();
+        fs::write(
+            skill_dir1.join("SKILL.md"),
+            "---\nname: skill-a\ndescription: First skill\nuser_invocable: true\n---\n\nContent A",
+        )
+        .unwrap();
+
+        let skill_dir2 = dir.path().join("skill-b");
+        fs::create_dir_all(&skill_dir2).unwrap();
+        fs::write(
+            skill_dir2.join("SKILL.md"),
+            "---\nname: skill-b\ndescription: Second skill\nuser_invocable: true\n---\n\nContent B",
+        )
+        .unwrap();
+
+        // Create a non-invocable skill
+        let skill_dir3 = dir.path().join("skill-c");
+        fs::create_dir_all(&skill_dir3).unwrap();
+        fs::write(
+            skill_dir3.join("SKILL.md"),
+            "---\nname: skill-c\ndescription: Hidden skill\nuser_invocable: false\n---\n\nContent C",
+        )
+        .unwrap();
+
+        let loader = SkillLoader::new(Some(SkillLoaderOptions {
+            skills_dir: Some(dir.path().to_path_buf()),
+            include_project_skills: false,
+            project_dir: None,
+        }));
+        let tool = SkillTool::new(loader);
+
+        let desc = tool.description();
+        assert!(desc.contains("Available skills:"));
+        assert!(desc.contains("skill-a: First skill"));
+        assert!(desc.contains("skill-b: Second skill"));
+        assert!(!desc.contains("skill-c"));
     }
 }

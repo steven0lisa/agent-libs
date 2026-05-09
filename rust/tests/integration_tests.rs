@@ -23,8 +23,8 @@ impl Tool for EchoTool {
         "echo"
     }
 
-    fn description(&self) -> &str {
-        "Echo back the input text"
+    fn description(&self) -> String {
+        "Echo back the input text".to_string()
     }
 
     fn input_schema(&self) -> serde_json::Value {
@@ -59,8 +59,8 @@ impl Tool for CalculatorTool {
         "calculator"
     }
 
-    fn description(&self) -> &str {
-        "Perform basic arithmetic"
+    fn description(&self) -> String {
+        "Perform basic arithmetic".to_string()
     }
 
     fn input_schema(&self) -> serde_json::Value {
