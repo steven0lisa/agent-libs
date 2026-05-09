@@ -29,6 +29,9 @@ pub struct ToolResult {
     pub content: String,
     /// Whether the result represents an error.
     pub is_error: bool,
+    /// Messages to inject into conversation history alongside the tool_result.
+    /// Placed as Text blocks in the SAME User message as the ToolResult block(s).
+    pub new_messages: Vec<Message>,
 }
 
 impl ToolResult {
@@ -37,6 +40,7 @@ impl ToolResult {
         Self {
             content: content.into(),
             is_error: false,
+            new_messages: Vec::new(),
         }
     }
 
@@ -45,6 +49,16 @@ impl ToolResult {
         Self {
             content: content.into(),
             is_error: true,
+            new_messages: Vec::new(),
+        }
+    }
+
+    /// Create a successful result with messages to inject.
+    pub fn success_with_messages(content: impl Into<String>, messages: Vec<Message>) -> Self {
+        Self {
+            content: content.into(),
+            is_error: false,
+            new_messages: messages,
         }
     }
 }
@@ -76,7 +90,7 @@ pub trait Tool: Send + Sync {
     fn name(&self) -> &str;
 
     /// Tool description.
-    fn description(&self) -> &str;
+    fn description(&self) -> String;
 
     /// JSON schema for tool input.
     fn input_schema(&self) -> Value;

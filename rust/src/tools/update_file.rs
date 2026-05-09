@@ -15,8 +15,8 @@ impl Tool for UpdateFileTool {
         "update_file"
     }
 
-    fn description(&self) -> &str {
-        "Update a file by replacing old_string with new_string."
+    fn description(&self) -> String {
+        "Update a file by replacing old_string with new_string.".to_string()
     }
 
     fn is_read_only(&self) -> bool {

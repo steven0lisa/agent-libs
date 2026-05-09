@@ -149,6 +149,10 @@ pub struct AgentConfig {
     /// These are passed to child processes (e.g., bash commands) but not
     /// exposed to the model. Useful for per-user credentials.
     pub extra_env: HashMap<String, String>,
+    /// Maximum output buffer size in bytes for bash tool (default: 8192 = 8KB).
+    /// Only the last N bytes of stdout/stderr are kept. If output exceeds this
+    /// limit, it is truncated with a notice appended.
+    pub bash_output_buffer_size: usize,
 }
 
 impl Default for AgentConfig {
@@ -187,6 +191,7 @@ impl Default for AgentConfig {
             allowed_read_dirs: Vec::new(),
             allowed_write_dirs: Vec::new(),
             extra_env: HashMap::new(),
+            bash_output_buffer_size: 8192,
         }
     }
 }

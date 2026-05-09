@@ -18,6 +18,18 @@ use crate::stream::StreamEvent;
 use crate::tool::{Tool, ToolDefinition, ToolResult};
 use crate::types::{AgentState, ContentBlock, Event, Message, Role};
 
+/// Result of executing a single tool (internal use).
+struct ToolExecResult {
+    content_block: ContentBlock,
+    new_messages: Vec<Message>,
+}
+
+/// Result of executing multiple tools (internal use).
+struct ToolsExecResult {
+    content_blocks: Vec<ContentBlock>,
+    injected_messages: Vec<Message>,
+}
+
 /// Agent with lifecycle management (run/pause/resume/stop).
 pub struct Agent {
     config: AgentConfig,
@@ -254,7 +266,7 @@ impl Agent {
             .values()
             .map(|t| ToolDefinition {
                 name: t.name().to_string(),
-                description: t.description().to_string(),
+                description: t.description(),
                 input_schema: t.input_schema(),
             })
             .collect();
@@ -520,7 +532,7 @@ impl Agent {
             }
 
             // Execute tools
-            let results = Self::execute_tools(
+            let exec_result = Self::execute_tools(
                 &tool_uses,
                 &config,
                 &tool_registry,
@@ -529,12 +541,18 @@ impl Agent {
             )
             .await?;
 
-            // Add tool results to history
+            // Add tool results to history, merging injected messages into the same User message
             {
                 let mut history = message_history.write().await;
+                // Merge injected messages and tool_result content blocks into one User message
+                let mut content: Vec<ContentBlock> = Vec::new();
+                for msg in exec_result.injected_messages {
+                    content.extend(msg.content);
+                }
+                content.extend(exec_result.content_blocks);
                 history.push(Message {
                     role: Role::User,
-                    content: results,
+                    content,
                 });
             }
         }
@@ -577,7 +595,7 @@ impl Agent {
         tool_registry: &HashMap<String, Arc<dyn Tool>>,
         message_history: &Arc<RwLock<Vec<Message>>>,
         tx: &mpsc::Sender<Event>,
-    ) -> Result<Vec<ContentBlock>, AgentError> {
+    ) -> Result<ToolsExecResult, AgentError> {
         // Group by read-only vs write
         let mut read_only: Vec<&ContentBlock> = Vec::new();
         let mut write: Vec<&ContentBlock> = Vec::new();
@@ -597,7 +615,8 @@ impl Agent {
             }
         }
 
-        let mut results = Vec::new();
+        let mut content_blocks = Vec::new();
+        let mut injected_messages = Vec::new();
 
         // Concurrent read-only execution
         if !read_only.is_empty() {
@@ -609,7 +628,7 @@ impl Agent {
                 })
                 .collect();
             let read_results = futures::future::join_all(read_futures).await;
-            for (result_block, block) in read_results.into_iter().zip(tool_uses.iter()) {
+            for (exec_result, block) in read_results.into_iter().zip(tool_uses.iter()) {
                 if let ContentBlock::ToolUse { name, id, input } = block {
                     let _ = tx.send(Event::ToolUseStart {
                         name: name.clone(),
@@ -617,8 +636,8 @@ impl Agent {
                         input: input.clone(),
                     }).await;
                     // Extract result info from ContentBlock for the event
-                    let tool_result = if let ContentBlock::ToolResult { content, is_error, .. } = &result_block {
-                        ToolResult { content: content.clone(), is_error: is_error.unwrap_or(false) }
+                    let tool_result = if let ContentBlock::ToolResult { content, is_error, .. } = &exec_result.content_block {
+                        ToolResult { content: content.clone(), is_error: is_error.unwrap_or(false), new_messages: vec![] }
                     } else {
                         ToolResult::error("Unexpected result type")
                     };
@@ -628,7 +647,8 @@ impl Agent {
                         result: tool_result,
                     }).await;
                 }
-                results.push(result_block);
+                injected_messages.extend(exec_result.new_messages);
+                content_blocks.push(exec_result.content_block);
             }
         }
 
@@ -641,7 +661,7 @@ impl Agent {
                     input: input.clone(),
                 }).await;
 
-                let result_block = Self::execute_single_tool(
+                let exec_result = Self::execute_single_tool(
                     (*block).clone(),
                     config,
                     tool_registry,
@@ -650,8 +670,8 @@ impl Agent {
                 .await;
 
                 // Extract result info from ContentBlock for the event
-                let tool_result = if let ContentBlock::ToolResult { content, is_error, .. } = &result_block {
-                    ToolResult { content: content.clone(), is_error: is_error.unwrap_or(false) }
+                let tool_result = if let ContentBlock::ToolResult { content, is_error, .. } = &exec_result.content_block {
+                    ToolResult { content: content.clone(), is_error: is_error.unwrap_or(false), new_messages: vec![] }
                 } else {
                     ToolResult::error("Unexpected result type")
                 };
@@ -662,11 +682,15 @@ impl Agent {
                     result: tool_result,
                 }).await;
 
-                results.push(result_block);
+                injected_messages.extend(exec_result.new_messages);
+                content_blocks.push(exec_result.content_block);
             }
         }
 
-        Ok(results)
+        Ok(ToolsExecResult {
+            content_blocks,
+            injected_messages,
+        })
     }
 
     /// Execute a single tool.
@@ -675,7 +699,7 @@ impl Agent {
         config: &AgentConfig,
         tool_registry: &HashMap<String, Arc<dyn Tool>>,
         message_history: &Arc<RwLock<Vec<Message>>>,
-    ) -> ContentBlock {
+    ) -> ToolExecResult {
         if let ContentBlock::ToolUse { name, id, input } = block {
             match tool_registry.get(&name) {
                 Some(tool) => {
@@ -693,23 +717,34 @@ impl Agent {
                         Err(e) => ToolResult::error(e.to_string()),
                     };
 
-                    ContentBlock::ToolResult {
+                    let content_block = ContentBlock::ToolResult {
                         tool_use_id: id,
                         content: result.content,
                         is_error: Some(result.is_error),
+                    };
+
+                    ToolExecResult {
+                        content_block,
+                        new_messages: result.new_messages,
                     }
                 }
-                None => ContentBlock::ToolResult {
-                    tool_use_id: id,
-                    content: format!("Tool not found: {}", name),
-                    is_error: Some(true),
+                None => ToolExecResult {
+                    content_block: ContentBlock::ToolResult {
+                        tool_use_id: id,
+                        content: format!("Tool not found: {}", name),
+                        is_error: Some(true),
+                    },
+                    new_messages: Vec::new(),
                 },
             }
         } else {
-            ContentBlock::ToolResult {
-                tool_use_id: String::new(),
-                content: "Invalid block type".to_string(),
-                is_error: Some(true),
+            ToolExecResult {
+                content_block: ContentBlock::ToolResult {
+                    tool_use_id: String::new(),
+                    content: "Invalid block type".to_string(),
+                    is_error: Some(true),
+                },
+                new_messages: Vec::new(),
             }
         }
     }
@@ -804,8 +839,8 @@ mod tests {
                 "custom_tool"
             }
 
-            fn description(&self) -> &str {
-                "A custom tool"
+            fn description(&self) -> String {
+                "A custom tool".to_string()
             }
 
             fn input_schema(&self) -> serde_json::Value {

@@ -36,8 +36,8 @@ impl Tool for CurlTool {
         "curl"
     }
 
-    fn description(&self) -> &str {
-        "Make an HTTP request."
+    fn description(&self) -> String {
+        "Make an HTTP request.".to_string()
     }
 
     fn is_read_only(&self) -> bool {
@@ -129,6 +129,7 @@ impl Tool for CurlTool {
         Ok(ToolResult {
             content,
             is_error: !status.is_success(),
+            new_messages: Vec::new(),
         })
     }
 }

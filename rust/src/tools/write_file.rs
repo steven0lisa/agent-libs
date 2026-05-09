@@ -15,8 +15,8 @@ impl Tool for WriteFileTool {
         "write_file"
     }
 
-    fn description(&self) -> &str {
-        "Write content to a file. Creates if not exists, overwrites if exists."
+    fn description(&self) -> String {
+        "Write content to a file. Creates if not exists, overwrites if exists.".to_string()
     }
 
     fn is_read_only(&self) -> bool {

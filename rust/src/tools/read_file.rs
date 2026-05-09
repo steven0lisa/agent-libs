@@ -15,8 +15,8 @@ impl Tool for ReadFileTool {
         "read_file"
     }
 
-    fn description(&self) -> &str {
-        "Read file contents from the working directory. Supports text, images, PDFs."
+    fn description(&self) -> String {
+        "Read file contents from the working directory. Supports text, images, PDFs.".to_string()
     }
 
     fn is_read_only(&self) -> bool {

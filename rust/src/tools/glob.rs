@@ -38,8 +38,8 @@ impl Tool for GlobTool {
         "glob"
     }
 
-    fn description(&self) -> &str {
-        "Find files matching a glob pattern."
+    fn description(&self) -> String {
+        "Find files matching a glob pattern.".to_string()
     }
 
     fn is_read_only(&self) -> bool {

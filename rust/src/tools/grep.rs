@@ -42,8 +42,8 @@ impl Tool for GrepTool {
         "grep"
     }
 
-    fn description(&self) -> &str {
-        "Search for patterns in files using regular expressions."
+    fn description(&self) -> String {
+        "Search for patterns in files using regular expressions.".to_string()
     }
 
     fn is_read_only(&self) -> bool {

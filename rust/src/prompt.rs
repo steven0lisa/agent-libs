@@ -106,8 +106,8 @@ mod tests {
             "test_tool"
         }
 
-        fn description(&self) -> &str {
-            "A test tool"
+        fn description(&self) -> String {
+            "A test tool".to_string()
         }
 
         fn input_schema(&self) -> serde_json::Value {

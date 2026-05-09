@@ -33,10 +33,10 @@ impl Tool for SubAgentTool {
         "subagent"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> String {
         "Create a subagent to handle an independent task. \
          The subagent shares your context but operates independently \
-         with its own tool budget."
+         with its own tool budget.".to_string()
     }
 
     fn is_read_only(&self) -> bool {
@@ -98,6 +98,7 @@ impl Tool for SubAgentTool {
             allowed_read_dirs: self.parent_config.allowed_read_dirs.clone(),
             allowed_write_dirs: self.parent_config.allowed_write_dirs.clone(),
             extra_env: self.parent_config.extra_env.clone(),
+            bash_output_buffer_size: self.parent_config.bash_output_buffer_size,
         };
 
         // Create subagent with forked context
