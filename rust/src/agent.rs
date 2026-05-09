@@ -672,6 +672,7 @@ impl Agent {
                         message_history: history,
                         allowed_read_dirs: config.allowed_read_dirs.clone(),
                         allowed_write_dirs: config.allowed_write_dirs.clone(),
+                        extra_env: config.extra_env.clone(),
                     };
 
                     let result = match tool.call(input.clone(), &ctx).await {

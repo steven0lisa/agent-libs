@@ -1,5 +1,6 @@
 //! Agent configuration.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::types::OutputFormat;
@@ -144,6 +145,10 @@ pub struct AgentConfig {
     pub allowed_read_dirs: Vec<PathBuf>,
     /// Directories that tools are allowed to write to (empty = all within work_dir).
     pub allowed_write_dirs: Vec<PathBuf>,
+    /// Extra environment variables to inject into tool execution context.
+    /// These are passed to child processes (e.g., bash commands) but not
+    /// exposed to the model. Useful for per-user credentials.
+    pub extra_env: HashMap<String, String>,
 }
 
 impl Default for AgentConfig {
@@ -181,6 +186,7 @@ impl Default for AgentConfig {
             auto_compact_threshold_pct: 0.8,
             allowed_read_dirs: Vec::new(),
             allowed_write_dirs: Vec::new(),
+            extra_env: HashMap::new(),
         }
     }
 }

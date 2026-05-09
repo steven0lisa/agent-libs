@@ -97,6 +97,7 @@ impl Tool for SubAgentTool {
             auto_compact_threshold_pct: self.parent_config.auto_compact_threshold_pct,
             allowed_read_dirs: self.parent_config.allowed_read_dirs.clone(),
             allowed_write_dirs: self.parent_config.allowed_write_dirs.clone(),
+            extra_env: self.parent_config.extra_env.clone(),
         };
 
         // Create subagent with forked context
@@ -163,6 +164,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
         let input = json!({"task": ""});
 
@@ -186,6 +188,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
         let input = json!({});
 

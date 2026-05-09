@@ -81,13 +81,19 @@ impl Tool for BashTool {
             )));
         }
 
+        let mut cmd = tokio::process::Command::new("sh");
+        cmd.arg("-c")
+            .arg(command)
+            .current_dir(&ctx.work_dir);
+
+        // Inject extra environment variables
+        for (key, value) in &ctx.extra_env {
+            cmd.env(key, value);
+        }
+
         let output = tokio::time::timeout(
             Duration::from_millis(timeout_ms),
-            tokio::process::Command::new("sh")
-                .arg("-c")
-                .arg(command)
-                .current_dir(&ctx.work_dir)
-                .output(),
+            cmd.output(),
         )
         .await
         .map_err(|_| ToolError(format!("Command timed out after {}ms", timeout_ms)))?
@@ -125,6 +131,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
         let input = json!({"command": "echo hello"});
 
@@ -144,6 +151,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
         let input = json!({"command": "echo error >&2"});
 
@@ -164,6 +172,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
         let input = json!({"command": "rm -rf /"});
 
@@ -186,6 +195,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
         let input = json!({"command": "rm safe_file.txt"});
 
@@ -205,6 +215,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
         let input = json!({"command": "sleep 10", "timeout": 100});
 
@@ -224,6 +235,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
         let input = json!({"command": "pwd"});
 

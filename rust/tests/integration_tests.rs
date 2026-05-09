@@ -149,6 +149,7 @@ async fn test_agent_register_custom_tool() {
         message_history: vec![],
         allowed_read_dirs: vec![],
         allowed_write_dirs: vec![],
+        extra_env: Default::default(),
     };
     let result = tool.call(json!({"text": "hello"}), &ctx).await.unwrap();
     assert_eq!(result.content, "Echo: hello");
@@ -197,6 +198,7 @@ async fn test_agent_multiple_custom_tools() {
         message_history: vec![],
         allowed_read_dirs: vec![],
         allowed_write_dirs: vec![],
+        extra_env: Default::default(),
     };
 
     let result = calc.call(json!({"a": 10, "b": 5, "operation": "add"}), &ctx).await.unwrap();

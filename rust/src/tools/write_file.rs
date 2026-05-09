@@ -78,6 +78,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
         let input = json!({"file_path": "test.txt", "content": "hello world"});
 
@@ -102,6 +103,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
         let input = json!({"file_path": "a/b/c/test.txt", "content": "nested"});
 
@@ -123,6 +125,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
         let input = json!({"file_path": "../outside.txt", "content": "bad"});
 
@@ -142,6 +145,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
         let input = json!({"file_path": "test.txt", "content": "new"});
 

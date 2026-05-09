@@ -279,6 +279,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         }
     }
 

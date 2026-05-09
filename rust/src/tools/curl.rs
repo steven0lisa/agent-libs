@@ -149,6 +149,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
         let input = json!({"url": "https://httpbin.org/get"});
 
@@ -179,6 +180,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
         let input = json!({"url": "http://internal.example.com/api"});
 
@@ -200,6 +202,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
         let input = json!({"url": "http://safe.example.com/api"});
 
@@ -228,6 +231,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
         let input = json!({
             "url": "https://httpbin.org/post",

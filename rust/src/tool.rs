@@ -1,5 +1,7 @@
 //! Tool trait and related types.
 
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 use serde_json::Value;
 
@@ -16,6 +18,8 @@ pub struct ToolContext {
     pub allowed_read_dirs: Vec<std::path::PathBuf>,
     /// Directories that tools are allowed to write to (empty = all within work_dir).
     pub allowed_write_dirs: Vec<std::path::PathBuf>,
+    /// Extra environment variables to inject into child processes.
+    pub extra_env: HashMap<String, String>,
 }
 
 /// Result of a tool execution.

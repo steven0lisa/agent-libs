@@ -149,6 +149,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
 
         let input = json!({"skill": "test-skill"});
@@ -172,6 +173,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
 
         let input = json!({"skill": "test-skill", "args": "some args here"});
@@ -199,6 +201,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
 
         let input = json!({"skill": "nonexistent"});
@@ -227,6 +230,7 @@ mod tests {
             message_history: vec![],
             allowed_read_dirs: vec![],
             allowed_write_dirs: vec![],
+            extra_env: Default::default(),
         };
 
         let input = json!({});
