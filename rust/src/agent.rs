@@ -55,6 +55,7 @@ impl Agent {
         agent.register_tool(Box::new(crate::tools::bash::BashTool::new(
             agent.config.bash_whitelist.clone(),
             agent.config.bash_blacklist.clone(),
+            agent.config.bash_output_buffer_size,
         )));
         agent.register_tool(Box::new(crate::tools::curl::CurlTool::new(
             agent.config.curl_whitelist.clone(),
@@ -65,7 +66,6 @@ impl Agent {
 
         // Register subagent tool if enabled
         if agent.config.enable_subagent {
-            let history = agent.message_history.clone();
             let config = agent.config.clone();
             agent.register_tool(Box::new(crate::tools::subagent::SubAgentTool::new(
                 config,
@@ -240,7 +240,6 @@ impl Agent {
             self.config.system_prompt.as_deref(),
             self.config.enable_subagent,
             self.config.subagent_max_turns,
-            &self.loaded_skills,
         );
 
         // Clone necessary data for the spawned task
@@ -262,6 +261,7 @@ impl Agent {
         // Clone the tool registry (Arc is cheap to clone) into the spawned task
         let tool_registry = self.tools.clone();
         let client = AnthropicClient::new(&self.config);
+        let loaded_skills = self.loaded_skills.clone();
 
         // Spawn the agent loop
         tokio::spawn(async move {
@@ -276,6 +276,7 @@ impl Agent {
                 tool_registry,
                 client,
                 system_prompt,
+                loaded_skills,
                 tx.clone(),
             )
             .await;
@@ -308,6 +309,7 @@ impl Agent {
         tool_registry: HashMap<String, Arc<dyn Tool>>,
         client: AnthropicClient,
         system_prompt: String,
+        loaded_skills: Vec<SkillInfo>,
         tx: mpsc::Sender<Event>,
     ) -> Result<(), AgentError> {
         let mut consecutive_compact_failures: usize = 0;
@@ -394,10 +396,21 @@ impl Agent {
             }
 
             // Re-read messages after potential compaction
-            let messages = {
+            let mut messages = {
                 let history = message_history.read().await;
                 history.clone()
             };
+
+            // Inject skill listing into the last user message
+            if let Some(skill_listing) = Self::build_skill_listing(&loaded_skills) {
+                if let Some(last_msg) = messages.last_mut() {
+                    if last_msg.role == Role::User {
+                        last_msg.content.push(ContentBlock::Text {
+                            text: format!("\n\n<system-reminder>\n{}\n</system-reminder>", skill_listing),
+                        });
+                    }
+                }
+            }
 
             // Wait if paused before API call
             Self::wait_if_paused_inner(&state, &pause_event).await;
@@ -724,6 +737,31 @@ impl Agent {
             })
             .collect::<Vec<_>>()
             .join("")
+    }
+
+    /// Build skill listing text for injection into user message.
+    /// Only includes skills where `user_invocable` is true.
+    fn build_skill_listing(skills: &[SkillInfo]) -> Option<String> {
+        let invocable: Vec<&SkillInfo> = skills
+            .iter()
+            .filter(|s| s.metadata.user_invocable)
+            .collect();
+        if invocable.is_empty() {
+            return None;
+        }
+
+        let mut lines = vec![
+            "The following skills are available for use with the Skill tool:".to_string(),
+        ];
+        for skill in &invocable {
+            let desc = if skill.metadata.description.is_empty() {
+                String::new()
+            } else {
+                format!(": {}", skill.metadata.description)
+            };
+            lines.push(format!("- /{}{}", skill.metadata.name, desc));
+        }
+        Some(lines.join("\n"))
     }
 }
 

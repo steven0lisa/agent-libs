@@ -204,6 +204,11 @@ fn set_metadata_field(meta: &mut SkillMetadata, key: &str, value: Value) {
                 meta.version = s;
             }
         }
+        "user_invocable" => {
+            if let Value::Bool(b) = value {
+                meta.user_invocable = b;
+            }
+        }
         _ => {}
     }
 }
@@ -297,5 +302,26 @@ mod tests {
         let (meta, content) = parse_skill_file(&path).unwrap();
         assert_eq!(meta.name, "");
         assert_eq!(content, "Just content without frontmatter");
+    }
+
+    #[test]
+    fn test_user_invocable_default() {
+        let raw = "---\nname: my-skill\n---\n\ncontent";
+        let meta = parse_frontmatter(raw);
+        assert!(meta.user_invocable); // default is true
+    }
+
+    #[test]
+    fn test_user_invocable_false() {
+        let raw = "---\nname: my-skill\nuser_invocable: false\n---\n\ncontent";
+        let meta = parse_frontmatter(raw);
+        assert!(!meta.user_invocable);
+    }
+
+    #[test]
+    fn test_user_invocable_explicit_true() {
+        let raw = "---\nname: my-skill\nuser_invocable: true\n---\n\ncontent";
+        let meta = parse_frontmatter(raw);
+        assert!(meta.user_invocable);
     }
 }

@@ -4,6 +4,7 @@ use std::env;
 
 /// Substitute variables in skill content:
 ///
+/// - `$1`, `$2`, `$3`...       -> positional arguments (split from args by spaces)
 /// - `$ARGUMENTS`              -> user-provided arguments
 /// - `${CLAUDE_SKILL_DIR}`     -> skill directory path
 /// - `${ENV:VAR_NAME}`         -> environment variable value
@@ -15,6 +16,11 @@ pub fn substitute_variables(
     skill_dir: Option<&str>,
 ) -> String {
     let mut result = content.to_string();
+
+    // Substitute positional parameters ($1, $2, $3, ...) BEFORE $ARGUMENTS
+    if let Some(args_val) = args {
+        result = replace_positional_params(&result, args_val);
+    }
 
     // Substitute $ARGUMENTS (without braces)
     if let Some(args_val) = args {
@@ -31,6 +37,41 @@ pub fn substitute_variables(
     result = replace_env_vars(&result);
 
     result
+}
+
+/// Replace positional parameters ($1, $2, $3, ...) with space-split args.
+fn replace_positional_params(text: &str, args: &str) -> String {
+    let parts: Vec<&str> = args.split_whitespace().collect();
+    let mut out = String::with_capacity(text.len());
+    let bytes = text.as_bytes();
+    let mut i = 0;
+
+    while i < bytes.len() {
+        if bytes[i] == b'$' && i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit() {
+            // Collect all consecutive digits after $
+            let mut num_start = i + 1;
+            while num_start < bytes.len() && bytes[num_start].is_ascii_digit() {
+                num_start += 1;
+            }
+            let num_str = &text[i + 1..num_start];
+            if let Ok(idx) = num_str.parse::<usize>() {
+                if idx >= 1 && idx <= parts.len() {
+                    out.push_str(parts[idx - 1]);
+                    i = num_start;
+                    continue;
+                }
+            }
+            // If index out of range, leave as-is
+            out.push(bytes[i] as char);
+            i += 1;
+        } else {
+            let ch = text[i..].chars().next().unwrap_or('\0');
+            out.push(ch);
+            i += ch.len_utf8();
+        }
+    }
+
+    out
 }
 
 /// Replace `$ARGUMENTS` (when not preceded by `{`) with the given value.
@@ -144,5 +185,28 @@ mod tests {
         let result = substitute_variables(content, Some("val"), None);
         // ${ARGUMENTS} should not be replaced since it's ${...} not plain $ARGUMENTS
         assert_eq!(result, "${ARGUMENTS}");
+    }
+
+    #[test]
+    fn test_positional_params() {
+        let content = "First: $1, Second: $2, All: $ARGUMENTS";
+        let result = substitute_variables(content, Some("hello world"), None);
+        assert_eq!(result, "First: hello, Second: world, All: hello world");
+    }
+
+    #[test]
+    fn test_positional_params_out_of_range() {
+        let content = "First: $1, Third: $3";
+        let result = substitute_variables(content, Some("hello world"), None);
+        assert_eq!(result, "First: hello, Third: $3");
+    }
+
+    #[test]
+    fn test_positional_params_before_arguments() {
+        // $ARGUMENTS expansion should not produce new $1 patterns
+        let content = "Args: $ARGUMENTS, First: $1";
+        let result = substitute_variables(content, Some("$2 placeholder"), None);
+        // $1 should be "$2" (first word), not expanded from $ARGUMENTS
+        assert_eq!(result, "Args: $2 placeholder, First: $2");
     }
 }

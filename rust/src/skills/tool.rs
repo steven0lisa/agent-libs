@@ -112,6 +112,21 @@ fn build_skill_result(skill: &SkillInfo, content: &str) -> String {
     parts.push(String::new());
     parts.push(content.to_string());
 
+    // Add allowed_tools soft constraint hint
+    if !skill.metadata.allowed_tools.is_empty() {
+        parts.push(String::new());
+        parts.push(format!(
+            "Note: When following this skill's instructions, only use these tools: {}",
+            skill.metadata.allowed_tools.join(", ")
+        ));
+    }
+
+    // Add fork mode soft marker
+    if skill.metadata.context == "fork" {
+        parts.push(String::new());
+        parts.push("This skill should be executed in a fork context.".to_string());
+    }
+
     parts.join("\n")
 }
 
@@ -237,5 +252,71 @@ mod tests {
         let result = tool.call(input, &ctx).await;
 
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_skill_tool_allowed_tools_hint() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let skill_dir = dir.path().join("restricted-skill");
+        fs::create_dir_all(&skill_dir).unwrap();
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: restricted-skill\nallowed_tools: bash, read_file\n---\n\nDo something",
+        )
+        .unwrap();
+
+        let loader = SkillLoader::new(Some(SkillLoaderOptions {
+            skills_dir: Some(dir.path().to_path_buf()),
+            include_project_skills: false,
+            project_dir: None,
+        }));
+        let tool = SkillTool::new(loader);
+
+        let ctx = ToolContext {
+            work_dir: dir.path().to_path_buf(),
+            message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
+            extra_env: Default::default(),
+        };
+
+        let input = json!({"skill": "restricted-skill"});
+        let result = tool.call(input, &ctx).await.unwrap();
+
+        assert!(!result.is_error);
+        assert!(result.content.contains("only use these tools: bash, read_file"));
+    }
+
+    #[tokio::test]
+    async fn test_skill_tool_fork_mode() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let skill_dir = dir.path().join("fork-skill");
+        fs::create_dir_all(&skill_dir).unwrap();
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: fork-skill\ncontext: fork\n---\n\nDo something in a fork",
+        )
+        .unwrap();
+
+        let loader = SkillLoader::new(Some(SkillLoaderOptions {
+            skills_dir: Some(dir.path().to_path_buf()),
+            include_project_skills: false,
+            project_dir: None,
+        }));
+        let tool = SkillTool::new(loader);
+
+        let ctx = ToolContext {
+            work_dir: dir.path().to_path_buf(),
+            message_history: vec![],
+            allowed_read_dirs: vec![],
+            allowed_write_dirs: vec![],
+            extra_env: Default::default(),
+        };
+
+        let input = json!({"skill": "fork-skill"});
+        let result = tool.call(input, &ctx).await.unwrap();
+
+        assert!(!result.is_error);
+        assert!(result.content.contains("should be executed in a fork context"));
     }
 }

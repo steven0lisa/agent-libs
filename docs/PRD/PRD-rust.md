@@ -700,3 +700,54 @@ async-trait = "0.1"
 futures = "0.3"
 thiserror = "1.0"
 ```
+
+## 9. Skill 系统
+
+### 9.1 Skill 列表注入
+
+Skill 列表不再出现在 system prompt 中，而是在每次 API 调用时注入到最后一条 user message 的末尾。这提高了模型对 Skill 的注意力，遵循 Claude Code 的设计模式。
+
+注入格式：
+
+```
+<system-reminder>
+The following skills are available for use with the Skill tool:
+- /skill-name: Description of the skill
+- /another-skill: Another description
+</system-reminder>
+```
+
+### 9.2 user_invocable 过滤
+
+`SkillMetadata` 包含 `user_invocable: bool` 字段（默认 `true`）。只有 `user_invocable: true` 的 skill 才会出现在注入的 skill listing 中。设置为 `false` 的 skill 仍然可以通过 skill tool 调用，但不会在用户界面中展示。
+
+### 9.3 位置参数替换
+
+支持 `$1`, `$2`, `$3`... 位置参数，从 args 按空格拆分获得：
+
+```
+$1 → 第 1 个参数
+$2 → 第 2 个参数
+$ARGUMENTS → 完整参数字符串
+```
+
+位置参数替换在 `$ARGUMENTS` 替换之前执行，避免 `$ARGUMENTS` 展开后的内容被误替换。
+
+### 9.4 allowed_tools 软约束
+
+当 skill 定义了 `allowed_tools` 时，skill 的 tool_result 末尾会追加软约束提示：
+
+```
+Note: When following this skill's instructions, only use these tools: bash, read_file
+```
+
+这是软约束而非硬限制，模型可以自行决定是否遵循。
+
+### 9.5 fork/inline 执行模式
+
+Skill 的 `context` 字段支持两种模式：
+
+- `inline`（默认）：skill 内容在当前 agent 上下文中执行
+- `fork`：skill 应在独立上下文中执行，tool_result 末尾标记 `This skill should be executed in a fork context.`
+
+fork 模式当前为"软标记"，由调用方（如 checker-robot）负责实际的 fork 执行。

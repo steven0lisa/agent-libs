@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 /// Metadata parsed from a skill's YAML frontmatter.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SkillMetadata {
     /// Skill name used to invoke it.
     pub name: String,
@@ -19,6 +19,23 @@ pub struct SkillMetadata {
     pub context: String,
     /// Skill version.
     pub version: String,
+    /// Whether this skill is user-invocable (e.g. via /skill-name).
+    pub user_invocable: bool,
+}
+
+impl Default for SkillMetadata {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            description: String::new(),
+            when_to_use: String::new(),
+            allowed_tools: Vec::new(),
+            model: String::new(),
+            context: String::new(),
+            version: String::new(),
+            user_invocable: true,
+        }
+    }
 }
 
 /// Information about a discovered skill.

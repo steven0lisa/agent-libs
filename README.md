@@ -1,5 +1,9 @@
 # agent-libs
 
+<div align="center">
+  <img src="docs/banner.png" alt="agent-libs banner" />
+</div>
+
 一个轻量级的多语言 Agent 库（Rust / Go / Java / Node.js / Python），核心能力是对接 Anthropic Messages API（以及兼容 API），实现标准的 agent-loop：模型可自主发起工具调用（tool_use），库负责执行工具并把结果（tool_result）回填给模型，直到产出最终回答。
 
 ## 支持语言

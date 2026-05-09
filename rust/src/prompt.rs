@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::skills::types::SkillInfo;
 use crate::tool::Tool;
 
 const DEFAULT_SYSTEM_PROMPT: &str = r#"You are a helpful software engineering assistant. You have access to tools that let you interact with the file system and execute commands.
@@ -61,13 +60,12 @@ Important:
 - Prefer subagents for exploration; keep modifications in the main agent
 "#;
 
-/// Build the system prompt with tool descriptions and optional skills section.
+/// Build the system prompt with tool descriptions.
 pub fn build_system_prompt(
     tools: &HashMap<String, Arc<dyn Tool>>,
     custom_prompt: Option<&str>,
     enable_subagent: bool,
     subagent_max_turns: usize,
-    skills: &[SkillInfo],
 ) -> String {
     let mut tool_descriptions = Vec::new();
     for (name, tool) in tools {
@@ -86,22 +84,6 @@ pub fn build_system_prompt(
 
     if enable_subagent {
         prompt.push_str(&SUBAGENT_PROMPT.replace("{max_turns}", &subagent_max_turns.to_string()));
-    }
-
-    // Add skills section if there are loaded skills
-    if !skills.is_empty() {
-        prompt.push_str("\n\n## Available Skills\n\n");
-        prompt.push_str("You have access to the following skills. To use a skill, call the `skill` tool with the skill name.\n\n");
-        for skill in skills {
-            prompt.push_str(&format!("### {}\n", skill.metadata.name));
-            if !skill.metadata.description.is_empty() {
-                prompt.push_str(&format!("Description: {}\n", skill.metadata.description));
-            }
-            if !skill.metadata.when_to_use.is_empty() {
-                prompt.push_str(&format!("When to use: {}\n", skill.metadata.when_to_use));
-            }
-            prompt.push('\n');
-        }
     }
 
     if let Some(custom) = custom_prompt {
@@ -151,7 +133,7 @@ mod tests {
         let mut tools: HashMap<String, Arc<dyn Tool>> = HashMap::new();
         tools.insert("test_tool".to_string(), Arc::new(TestTool));
 
-        let prompt = build_system_prompt(&tools, None, false, 50, &[]);
+        let prompt = build_system_prompt(&tools, None, false, 50);
 
         assert!(prompt.contains("You are a helpful software engineering assistant"));
         assert!(prompt.contains("test_tool"));
@@ -163,7 +145,7 @@ mod tests {
     fn test_build_system_prompt_with_subagent() {
         let tools: HashMap<String, Arc<dyn Tool>> = HashMap::new();
 
-        let prompt = build_system_prompt(&tools, None, true, 50, &[]);
+        let prompt = build_system_prompt(&tools, None, true, 50);
 
         assert!(prompt.contains("Subagent Capability"));
         assert!(prompt.contains("50"));
@@ -173,7 +155,7 @@ mod tests {
     fn test_build_system_prompt_with_custom() {
         let tools: HashMap<String, Arc<dyn Tool>> = HashMap::new();
 
-        let prompt = build_system_prompt(&tools, Some("Be extra careful"), false, 50, &[]);
+        let prompt = build_system_prompt(&tools, Some("Be extra careful"), false, 50);
 
         assert!(prompt.contains("Custom Instructions"));
         assert!(prompt.contains("Be extra careful"));
@@ -184,7 +166,7 @@ mod tests {
         let mut tools: HashMap<String, Arc<dyn Tool>> = HashMap::new();
         tools.insert("test_tool".to_string(), Arc::new(TestTool));
 
-        let prompt = build_system_prompt(&tools, None, false, 50, &[]);
+        let prompt = build_system_prompt(&tools, None, false, 50);
 
         assert!(prompt.contains("## Available Tools"));
         assert!(prompt.contains("### test_tool"));
@@ -192,26 +174,12 @@ mod tests {
     }
 
     #[test]
-    fn test_build_system_prompt_with_skills() {
+    fn test_build_system_prompt_no_skills_section() {
         let tools: HashMap<String, Arc<dyn Tool>> = HashMap::new();
 
-        let skills = vec![crate::skills::types::SkillInfo {
-            metadata: crate::skills::types::SkillMetadata {
-                name: "my-skill".to_string(),
-                description: "Does something useful".to_string(),
-                when_to_use: "When you need help".to_string(),
-                ..Default::default()
-            },
-            content: "Do the thing".to_string(),
-            file_path: std::path::PathBuf::from("/tmp/skills/my-skill/SKILL.md"),
-            dir_path: std::path::PathBuf::from("/tmp/skills/my-skill"),
-        }];
+        let prompt = build_system_prompt(&tools, None, false, 50);
 
-        let prompt = build_system_prompt(&tools, None, false, 50, &skills);
-
-        assert!(prompt.contains("Available Skills"));
-        assert!(prompt.contains("my-skill"));
-        assert!(prompt.contains("Does something useful"));
-        assert!(prompt.contains("When you need help"));
+        // Skills should NOT appear in system prompt (moved to user message injection)
+        assert!(!prompt.contains("Available Skills"));
     }
 }

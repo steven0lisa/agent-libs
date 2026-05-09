@@ -144,6 +144,7 @@ impl SkillLoader {
                             model: metadata.model,
                             context: metadata.context,
                             version: metadata.version,
+                            user_invocable: metadata.user_invocable,
                         },
                         content,
                         file_path: skill_file,
