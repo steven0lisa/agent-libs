@@ -46,6 +46,7 @@ public final class FrontmatterParser {
         String model = null;
         String context = null;
         String version = null;
+        boolean userInvocable = true;
 
         Matcher kvMatcher = KEY_VALUE_PATTERN.matcher(yamlBlock);
         String currentKey = null;
@@ -95,6 +96,11 @@ public final class FrontmatterParser {
                 case "model" -> model = (String) parsed;
                 case "context" -> context = (String) parsed;
                 case "version" -> version = (String) parsed;
+                case "user_invocable" -> {
+                    if (parsed instanceof Boolean b) {
+                        userInvocable = b;
+                    }
+                }
                 default -> { /* skip unknown keys */ }
             }
         }
@@ -110,7 +116,7 @@ public final class FrontmatterParser {
             }
         }
 
-        return new SkillMetadata(name, description, whenToUse, allowedTools, model, context, version);
+        return new SkillMetadata(name, description, whenToUse, allowedTools, model, context, version, userInvocable);
     }
 
     /**

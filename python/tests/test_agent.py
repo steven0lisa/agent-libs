@@ -473,7 +473,7 @@ class TestAgentToolExecution:
             ToolUseBlock(name="slow_write", id="tu_01", input={}),
         ]
 
-        results = await agent._execute_tools(tool_uses)
+        results, injected = await agent._execute_tools(tool_uses)
         assert len(results) == 1
 
     @pytest.mark.asyncio
@@ -485,7 +485,7 @@ class TestAgentToolExecution:
             ToolUseBlock(name="nonexistent", id="tu_01", input={}),
         ]
 
-        results = await agent._execute_tools(tool_uses)
+        results, injected = await agent._execute_tools(tool_uses)
         assert len(results) == 1
         assert "not found" in results[0].content.lower()
 

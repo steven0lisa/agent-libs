@@ -92,6 +92,11 @@ func parseFrontmatter(raw string) Metadata {
 	if v, ok := fields["version"].(string); ok {
 		meta.Version = v
 	}
+	// user_invocable defaults to true; only set to false if explicitly "false"
+	meta.UserInvocable = true
+	if v, ok := fields["user_invocable"].(bool); ok {
+		meta.UserInvocable = v
+	}
 
 	return meta
 }

@@ -328,14 +328,19 @@ class Agent:
                     return
 
                 # Execute tools
-                results = await self._execute_tools(tool_uses)
+                results, injected_messages = await self._execute_tools(tool_uses)
 
                 if not self._check_state():
                     break
 
-                # Add tool results to history
+                # Add tool results to history, merging injected messages
+                # into the same User message
+                content: list[ContentBlock] = []
+                for msg in injected_messages:
+                    content.extend(msg.content)
+                content.extend(results)
                 self._message_history.append(
-                    Message(role=Role.USER, content=results)
+                    Message(role=Role.USER, content=content)
                 )
 
             # Max turns reached
@@ -355,7 +360,7 @@ class Agent:
 
     async def _execute_tools(
         self, tool_uses: list[ToolUseBlock]
-    ) -> list[ContentBlock]:
+    ) -> tuple[list[ContentBlock], list[Message]]:
         # Group by read-only
         read_only: list[ToolUseBlock] = []
         write: list[ToolUseBlock] = []
@@ -368,6 +373,7 @@ class Agent:
                 write.append(block)
 
         results: list[ContentBlock] = []
+        injected: list[Message] = []
 
         # Concurrent read-only
         if read_only:
@@ -387,26 +393,32 @@ class Agent:
                         )
                     )
                 else:
-                    results.append(r)
+                    block, msgs = r
+                    results.append(block)
+                    injected.extend(msgs)
 
         # Sequential write
         for block in write:
             if not self._check_state():
                 break
-            result = await self._execute_single_tool(block)
-            results.append(result)
+            result_block, msgs = await self._execute_single_tool(block)
+            results.append(result_block)
+            injected.extend(msgs)
 
-        return results
+        return results, injected
 
     async def _execute_single_tool(
         self, block: ToolUseBlock
-    ) -> ContentBlock:
+    ) -> tuple[ContentBlock, list[Message]]:
         tool = self._tools.get(block.name)
         if not tool:
-            return ToolResultBlock(
-                tool_use_id=block.id,
-                content=f"Tool not found: {block.name}",
-                is_error=True,
+            return (
+                ToolResultBlock(
+                    tool_use_id=block.id,
+                    content=f"Tool not found: {block.name}",
+                    is_error=True,
+                ),
+                [],
             )
 
         context = ToolContext(
@@ -421,10 +433,13 @@ class Agent:
         except Exception as e:
             result = ToolResult.error(str(e))
 
-        return ToolResultBlock(
-            tool_use_id=block.id,
-            content=result.content,
-            is_error=result.is_error,
+        return (
+            ToolResultBlock(
+                tool_use_id=block.id,
+                content=result.content,
+                is_error=result.is_error,
+            ),
+            result.new_messages,
         )
 
     # ------------------------------------------------------------------

@@ -22,8 +22,9 @@ type ToolContext struct {
 
 // ToolResult is the result of a tool execution.
 type ToolResult struct {
-	Content string `json:"content"`
-	IsError bool   `json:"is_error"`
+	Content     string    `json:"content"`
+	IsError     bool      `json:"is_error"`
+	NewMessages []Message `json:"new_messages,omitempty"`
 }
 
 // Success creates a successful tool result.
@@ -34,6 +35,11 @@ func Success(content string) ToolResult {
 // Error creates an error tool result.
 func Error(content string) ToolResult {
 	return ToolResult{Content: content, IsError: true}
+}
+
+// SuccessWithMessages creates a successful tool result with messages to inject into the conversation.
+func SuccessWithMessages(content string, messages []Message) ToolResult {
+	return ToolResult{Content: content, IsError: false, NewMessages: messages}
 }
 
 // BaseTool provides default implementations for the Tool interface.

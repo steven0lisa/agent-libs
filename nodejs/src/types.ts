@@ -89,6 +89,8 @@ export function compactEvent(messageCount: number, tokenEstimate: number): Event
 export interface ToolResult {
   content: string;
   isError: boolean;
+  /** Messages to inject into conversation history alongside the tool_result. */
+  newMessages?: Message[];
 }
 
 export function successResult(content: string): ToolResult {
@@ -97,4 +99,8 @@ export function successResult(content: string): ToolResult {
 
 export function errorResult(content: string): ToolResult {
   return { content, isError: true };
+}
+
+export function successWithMessages(content: string, messages: Message[]): ToolResult {
+  return { content, isError: false, newMessages: messages };
 }

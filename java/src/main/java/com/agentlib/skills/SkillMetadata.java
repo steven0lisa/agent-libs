@@ -12,7 +12,8 @@ public record SkillMetadata(
     List<String> allowedTools,
     String model,
     String context,
-    String version
+    String version,
+    boolean userInvocable
 ) {
 
     private static final List<String> VALID_CONTEXTS = List.of("inline", "fork");
@@ -27,5 +28,13 @@ public record SkillMetadata(
         if (allowedTools != null && allowedTools.isEmpty()) {
             allowedTools = null;
         }
+    }
+
+    /**
+     * Convenience constructor without userInvocable (defaults to true).
+     */
+    public SkillMetadata(String name, String description, String whenToUse,
+                         List<String> allowedTools, String model, String context, String version) {
+        this(name, description, whenToUse, allowedTools, model, context, version, true);
     }
 }

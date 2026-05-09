@@ -233,11 +233,19 @@ func (a *skillToolAdapter) IsReadOnly() bool          { return a.inner.ToolIsRea
 func (a *skillToolAdapter) Call(ctx context.Context, input map[string]any, toolCtx ToolContext) (ToolResult, error) {
 	name := GetString(input, "skill", "")
 	args := GetString(input, "args", "")
-	result, err := a.inner.ExecuteWithArgs(name, args)
+	brief, injectionMsgs, err := a.inner.ExecuteWithInjection(name, args)
 	if err != nil {
 		return Error(err.Error()), nil
 	}
-	return Success(result), nil
+	// Convert injection messages to Message type
+	var msgs []Message
+	for _, im := range injectionMsgs {
+		msgs = append(msgs, Message{
+			Role:    Role(im.Role),
+			Content: []ContentBlock{TextBlock{Text: im.Content}},
+		})
+	}
+	return SuccessWithMessages(brief, msgs), nil
 }
 
 // Run starts the agent with the given input.
@@ -463,16 +471,26 @@ func (a *Agent) runLoop(ctx context.Context, events chan<- Event) {
 			return
 		}
 
-		// Add tool results to history
-		resultBlocks := make([]ContentBlock, len(results))
-		for i, r := range results {
-			resultBlocks[i] = r
+		// Add tool results to history, merging injected messages
+		var injectedMessages []Message
+		var resultBlocks []ContentBlock
+		for _, r := range results {
+			resultBlocks = append(resultBlocks, r)
+			for _, msg := range r.NewMessages {
+				injectedMessages = append(injectedMessages, msg)
+			}
 		}
+
+		var content []ContentBlock
+		for _, msg := range injectedMessages {
+			content = append(content, msg.Content...)
+		}
+		content = append(content, resultBlocks...)
 
 		a.mu.Lock()
 		a.messageHistory = append(a.messageHistory, Message{
 			Role:    RoleUser,
-			Content: resultBlocks,
+			Content: content,
 		})
 		a.mu.Unlock()
 	}
@@ -639,9 +657,10 @@ func (a *Agent) executeSingleTool(ctx context.Context, tu ToolUseBlock, events c
 	}
 
 	resultBlock := ToolResultBlock{
-		ToolUseID: tu.ID,
-		Content:   result.Content,
-		IsError:   boolPtr(result.IsError),
+		ToolUseID:   tu.ID,
+		Content:     result.Content,
+		IsError:     boolPtr(result.IsError),
+		NewMessages: result.NewMessages,
 	}
 
 	a.emit(events, Event{Type: EventToolUseEnd, Data: map[string]any{

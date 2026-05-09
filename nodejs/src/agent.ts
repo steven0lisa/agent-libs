@@ -230,9 +230,15 @@ export class Agent {
           return;
         }
 
-        const results = await this.executeTools(toolUses);
+        const { blocks: results, injectedMessages } = await this.executeTools(toolUses);
         if (!this.checkState()) break;
-        this.messageHistory.push({ role: 'user', content: results });
+        // Merge injected messages and tool_result blocks into one User message
+        const userContent: ContentBlock[] = [];
+        for (const msg of injectedMessages) {
+          userContent.push(...msg.content);
+        }
+        userContent.push(...results);
+        this.messageHistory.push({ role: 'user', content: userContent });
       }
 
       if (this.turnCount >= this.config.maxTurns) {
@@ -245,7 +251,7 @@ export class Agent {
     }
   }
 
-  private async executeTools(toolUses: ToolUseBlock[]): Promise<ContentBlock[]> {
+  private async executeTools(toolUses: ToolUseBlock[]): Promise<{ blocks: ContentBlock[]; injectedMessages: Message[] }> {
     const readOnly: ToolUseBlock[] = [];
     const write: ToolUseBlock[] = [];
     for (const block of toolUses) {
@@ -253,25 +259,31 @@ export class Agent {
       if (tool?.isReadOnly) readOnly.push(block); else write.push(block);
     }
 
-    const results: ContentBlock[] = [];
+    const blocks: ContentBlock[] = [];
+    const injectedMessages: Message[] = [];
 
     if (readOnly.length > 0) {
       const readResults = await Promise.all(readOnly.map(b => this.executeSingleTool(b)));
-      results.push(...readResults);
+      for (const r of readResults) {
+        blocks.push(r.block);
+        if (r.newMessages) injectedMessages.push(...r.newMessages);
+      }
     }
 
     for (const block of write) {
       if (!this.checkState()) break;
-      results.push(await this.executeSingleTool(block));
+      const r = await this.executeSingleTool(block);
+      blocks.push(r.block);
+      if (r.newMessages) injectedMessages.push(...r.newMessages);
     }
 
-    return results;
+    return { blocks, injectedMessages };
   }
 
-  private async executeSingleTool(block: ToolUseBlock): Promise<ContentBlock> {
+  private async executeSingleTool(block: ToolUseBlock): Promise<{ block: ContentBlock; newMessages?: Message[] }> {
     const tool = this.tools.get(block.name);
     if (!tool) {
-      return { type: 'tool_result', tool_use_id: block.id, content: `Tool not found: ${block.name}`, is_error: true };
+      return { block: { type: 'tool_result', tool_use_id: block.id, content: `Tool not found: ${block.name}`, is_error: true } };
     }
 
     const context: ToolContext = {
@@ -281,9 +293,12 @@ export class Agent {
 
     try {
       const result = await tool.call(block.input, context);
-      return { type: 'tool_result', tool_use_id: block.id, content: result.content, is_error: result.isError };
+      return {
+        block: { type: 'tool_result', tool_use_id: block.id, content: result.content, is_error: result.isError },
+        newMessages: result.newMessages,
+      };
     } catch (e) {
-      return { type: 'tool_result', tool_use_id: block.id, content: String(e), is_error: true };
+      return { block: { type: 'tool_result', tool_use_id: block.id, content: String(e), is_error: true } };
     }
   }
 

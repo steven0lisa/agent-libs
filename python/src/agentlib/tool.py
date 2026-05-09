@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .types import Message
 
@@ -20,6 +20,7 @@ class ToolContext:
 class ToolResult:
     content: str
     is_error: bool = False
+    new_messages: list[Message] = field(default_factory=list)
 
     @staticmethod
     def success(content: str) -> ToolResult:
@@ -28,6 +29,10 @@ class ToolResult:
     @staticmethod
     def error(content: str) -> ToolResult:
         return ToolResult(content=content, is_error=True)
+
+    @staticmethod
+    def success_with_messages(content: str, messages: list[Message]) -> ToolResult:
+        return ToolResult(content=content, is_error=False, new_messages=messages)
 
 
 @runtime_checkable

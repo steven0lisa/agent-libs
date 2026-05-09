@@ -346,6 +346,113 @@ cd rust
 cargo test
 ```
 
+## 安全策略
+
+Agent 内置的安全策略可以控制 `bash` 和 `curl` 工具的行为，防止执行危险命令或访问不受信任的端点。
+
+### 配置方式
+
+安全策略分为**白名单（whitelist）**和**黑名单（blacklist）**两种模式，支持通配符（wildcard）和正则表达式（regex）匹配。白名单优先级高于黑名单。
+
+#### Python
+
+```python
+config = AgentConfig(
+    api_key="...",
+    # Bash 安全策略
+    bash_whitelist=["ls", "cat", "grep", "find", "pwd", "echo", "head", "tail"],
+    bash_blacklist=["rm *", "dd *", "mkfs *", "format *", "> /dev/*"],
+
+    # Curl 安全策略
+    curl_whitelist=["https://api.example.com/*"],
+    curl_blacklist=["http://*"],  # 禁止 HTTP（非加密）请求
+)
+```
+
+#### Go
+
+```go
+cfg := agentlib.DefaultConfig()
+cfg.BashWhitelist = []string{"ls", "cat", "grep", "find", "pwd", "echo"}
+cfg.BashBlacklist = []string{"rm *", "dd *", "mkfs *"}
+cfg.CurlWhitelist = []string{"https://api.example.com/*"}
+cfg.CurlBlacklist = []string{"http://*"}
+```
+
+#### Node.js
+
+```typescript
+const config = resolveConfig({
+  apiKey: '...',
+  bashWhitelist: ['ls', 'cat', 'grep', 'find', 'pwd', 'echo'],
+  bashBlacklist: ['rm *', 'dd *', 'mkfs *'],
+  curlWhitelist: ['https://api.example.com/*'],
+  curlBlacklist: ['http://*'],
+});
+```
+
+#### Rust
+
+```rust
+let config = AgentConfig {
+    api_key: "...".to_string(),
+    bash_whitelist: vec!["ls".into(), "cat".into(), "grep".into(), "find".into()],
+    bash_blacklist: vec!["rm *".into(), "dd *".into(), "mkfs *".into()],
+    curl_whitelist: vec!["https://api.example.com/*".into()],
+    curl_blacklist: vec!["http://*".into()],
+    ..Default::default()
+};
+```
+
+#### Java
+
+```java
+AgentConfig config = AgentConfig.builder()
+    .apiKey("...")
+    .bashWhitelist(List.of("ls", "cat", "grep", "find", "pwd", "echo"))
+    .bashBlacklist(List.of("rm *", "dd *", "mkfs *"))
+    .curlWhitelist(List.of("https://api.example.com/*"))
+    .curlBlacklist(List.of("http://*"))
+    .build();
+```
+
+### 常见场景
+
+**场景 1：禁用所有 shell 命令**
+
+将白名单设为仅包含一个不存在的命令（或空列表 + 默认拒绝模式），使所有命令都被拒绝：
+
+```python
+# 方式一：空白名单 + 严格模式（推荐）
+config = AgentConfig(
+    bash_whitelist=[],   # 空白名单 = 仅允许明确列出的命令
+)
+```
+
+**场景 2：只允许只读命令**
+
+```python
+config = AgentConfig(
+    bash_whitelist=["ls", "cat", "grep", "find", "pwd", "echo", "head", "tail", "wc", "tree"],
+    bash_blacklist=["rm *", "chmod *", "chown *", "mv *", "cp *"],
+)
+```
+
+**场景 3：限制 curl 只能访问特定 API**
+
+```python
+config = AgentConfig(
+    curl_whitelist=["https://api.mycompany.com/*", "https://internal.service/*"],
+    curl_blacklist=["*"],
+)
+```
+
+### 匹配规则
+
+- **通配符模式**：`*` 匹配任意字符序列，`?` 匹配单个字符
+- **白名单优先**：如果一个命令同时匹配白名单和黑名单，白名单生效（允许执行）
+- **空配置**：不设置 whitelist/blacklist 时，所有命令默认允许
+
 ## 示例代码
 
 更多示例见 `examples/`：

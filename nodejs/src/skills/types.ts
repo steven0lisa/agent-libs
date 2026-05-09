@@ -8,6 +8,8 @@ export interface SkillMetadata {
   model?: string;
   context?: 'inline' | 'fork';
   version?: string;
+  /** Whether this skill can be invoked by the user. Default: true. */
+  user_invocable?: boolean;
 }
 
 export interface SkillInfo {

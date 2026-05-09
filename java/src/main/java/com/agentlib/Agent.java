@@ -497,9 +497,24 @@ public class Agent {
                             break;
                         }
 
-                        // Add tool results to history
-                        messageHistory.add(new Message(Role.USER,
-                            results.stream().map(r -> (ContentBlock) r).toList()));
+                        // Collect injected messages from all tool results
+                        List<Message> injectedMessages = new ArrayList<>();
+                        List<ContentBlock> resultBlocks = new ArrayList<>();
+                        for (var r : results) {
+                            resultBlocks.add(r);
+                            if (r.newMessages() != null) {
+                                injectedMessages.addAll(r.newMessages());
+                            }
+                        }
+
+                        // Merge injected messages and tool_result blocks into one User message
+                        List<ContentBlock> userContent = new ArrayList<>();
+                        for (Message msg : injectedMessages) {
+                            userContent.addAll(msg.content());
+                        }
+                        userContent.addAll(resultBlocks);
+
+                        messageHistory.add(new Message(Role.USER, userContent));
                     }
 
                     // Max turns reached
@@ -616,7 +631,7 @@ public class Agent {
         subscriber.onNext(endEvent);
         emitEvent(endEvent);
 
-        return new ToolResultBlock(tu.id(), result.content(), result.isError());
+        return new ToolResultBlock(tu.id(), result.content(), result.isError(), result.newMessages());
     }
 
     // ------------------------------------------------------------------

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ..tool import Tool, ToolContext, ToolResult
+from ..types import ContentBlock, Message, Role, TextBlock
 from .loader import SkillLoader
 from .substitution import substitute_variables
 from .types import SkillInfo
@@ -15,10 +16,6 @@ class SkillTool(Tool):
     """
 
     name = "skill"
-    description = (
-        "Load a skill and get its instructions. "
-        "Skills provide specialized capabilities for specific tasks."
-    )
     is_read_only = True
 
     input_schema = {
@@ -41,6 +38,23 @@ class SkillTool(Tool):
 
     def __init__(self, loader: SkillLoader) -> None:
         self._loader = loader
+
+    @property
+    def description(self) -> str:
+        desc = (
+            "Load a skill and get its instructions. "
+            "Skills provide specialized capabilities for specific tasks."
+        )
+        skills = self._loader.discover_all()
+        invocable = [s for s in skills if s.metadata.user_invocable]
+        if invocable:
+            desc += "\n\nAvailable skills:\n"
+            for skill in invocable:
+                if skill.metadata.description:
+                    desc += f"- {skill.metadata.name}: {skill.metadata.description}\n"
+                else:
+                    desc += f"- {skill.metadata.name}\n"
+        return desc
 
     async def call(
         self, input: dict, context: ToolContext
@@ -69,12 +83,17 @@ class SkillTool(Tool):
             skill_dir=skill.dir_path,
         )
 
-        result = _build_skill_result(skill, processed)
-        return ToolResult.success(result)
+        full_content = _build_skill_injection_content(skill, processed)
+        brief = f"Skill loaded: {skill.metadata.name}"
+        injection_msg = Message(
+            role=Role.USER,
+            content=[TextBlock(text=full_content)],
+        )
+        return ToolResult.success_with_messages(brief, [injection_msg])
 
 
-def _build_skill_result(skill: SkillInfo, content: str) -> str:
-    """Format a skill's metadata and content into a result string."""
+def _build_skill_injection_content(skill: SkillInfo, content: str) -> str:
+    """Format a skill's metadata and content into an injection string."""
     parts: list[str] = []
     parts.append(f"## Skill: {skill.metadata.name}")
 
@@ -85,4 +104,16 @@ def _build_skill_result(skill: SkillInfo, content: str) -> str:
 
     parts.append("")
     parts.append(content)
+
+    if skill.metadata.allowed_tools:
+        parts.append("")
+        parts.append(
+            f"Note: When following this skill's instructions, "
+            f"only use these tools: {', '.join(skill.metadata.allowed_tools)}"
+        )
+
+    if skill.metadata.context == "fork":
+        parts.append("")
+        parts.append("This skill should be executed in a fork context.")
+
     return "\n".join(parts)

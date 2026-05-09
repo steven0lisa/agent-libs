@@ -1,20 +1,36 @@
-/** SkillTool — ITool implementation that loads skills and returns their content. */
+/** SkillTool — ITool implementation that loads skills and injects their content as user messages. */
 
 import { ITool, ToolContext } from '../config.js';
-import { successResult, errorResult } from '../types.js';
+import { successResult, errorResult, successWithMessages, Message } from '../types.js';
 import { SkillLoader } from './loader.js';
 import { substituteVariables } from './substitution.js';
 import type { SkillInfo } from './types.js';
 
 export class SkillTool implements ITool {
   readonly name = 'skill';
-  readonly description = 'Load a skill and get its instructions. Skills provide specialized capabilities for specific tasks.';
   readonly isReadOnly = true;
 
   private loader: SkillLoader;
 
   constructor(loader: SkillLoader) {
     this.loader = loader;
+  }
+
+  /** Dynamically list user-invocable skills in the description. */
+  get description(): string {
+    let desc = 'Load a skill and get its instructions. Skills provide specialized capabilities for specific tasks.';
+    const skills = this.loader.discoverAll();
+    const invocable = skills.filter(s => s.metadata.user_invocable !== false);
+    if (invocable.length > 0) {
+      desc += '\n\nAvailable skills:\n';
+      for (const skill of invocable) {
+        const line = skill.metadata.description
+          ? `- ${skill.metadata.name}: ${skill.metadata.description}`
+          : `- ${skill.metadata.name}`;
+        desc += line + '\n';
+      }
+    }
+    return desc;
   }
 
   readonly inputSchema = {
@@ -53,12 +69,19 @@ export class SkillTool implements ITool {
       skillDir: skill.dirPath,
     });
 
-    const result = buildSkillResult(skill, processedContent);
-    return successResult(result);
+    // Message injection mode: inject skill content as a user message
+    const fullContent = buildSkillInjectionContent(skill, processedContent);
+    const brief = `Skill loaded: ${skill.metadata.name}`;
+    const injectionMsg: Message = {
+      role: 'user',
+      content: [{ type: 'text', text: fullContent }],
+    };
+    return successWithMessages(brief, [injectionMsg]);
   }
 }
 
-function buildSkillResult(skill: SkillInfo, content: string): string {
+/** Build the formatted injection content from a skill. */
+function buildSkillInjectionContent(skill: SkillInfo, content: string): string {
   const parts: string[] = [];
   parts.push(`## Skill: ${skill.metadata.name}`);
 
@@ -69,6 +92,22 @@ function buildSkillResult(skill: SkillInfo, content: string): string {
     parts.push(`When to use: ${skill.metadata.when_to_use}`);
   }
 
-  parts.push('', content);
+  parts.push('');
+  parts.push(content);
+
+  // Add allowed_tools soft constraint hint
+  if (skill.metadata.allowed_tools && skill.metadata.allowed_tools.length > 0) {
+    parts.push('');
+    parts.push(
+      `Note: When following this skill's instructions, only use these tools: ${skill.metadata.allowed_tools.join(', ')}`
+    );
+  }
+
+  // Add fork mode soft marker
+  if (skill.metadata.context === 'fork') {
+    parts.push('');
+    parts.push('This skill should be executed in a fork context.');
+  }
+
   return parts.join('\n');
 }

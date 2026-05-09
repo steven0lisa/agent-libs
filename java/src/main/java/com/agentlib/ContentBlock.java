@@ -1,6 +1,7 @@
 package com.agentlib;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.util.List;
 
 /**
  * Sealed interface representing a content block in a message.
@@ -40,8 +41,13 @@ record ToolUseBlock(
 record ToolResultBlock(
     String toolUseId,
     String content,
-    Boolean isError
+    Boolean isError,
+    List<Message> newMessages
 ) implements ContentBlock {
+    ToolResultBlock(String toolUseId, String content, Boolean isError) {
+        this(toolUseId, content, isError, List.of());
+    }
+
     @Override
     public String type() {
         return "tool_result";
